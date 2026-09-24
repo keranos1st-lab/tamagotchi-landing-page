@@ -37,6 +37,7 @@ export interface PetState {
   train: () => void;
   sleep: () => void;
   heal: () => void;
+  pet: () => void;
   addChatMessage: (role: 'user' | 'pet', text: string) => void;
   tick: () => void;
   gainExp: (amount: number) => void;
@@ -107,6 +108,15 @@ export const usePetStore = create<PetState>()(
       lastInteraction: Date.now(),
     });
     get().gainExp(10);
+  },
+
+  pet: () => {
+    const state = get();
+    set({
+      happiness: Math.min(100, state.happiness + 2),
+      lastInteraction: Date.now(),
+    });
+    get().gainExp(1);
   },
 
   play: () => {

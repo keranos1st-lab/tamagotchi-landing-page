@@ -57,9 +57,18 @@ const FX: Partial<Record<PetAnim, { cls: string; items: (P & { ch: string })[] }
   wave: {
     cls: 'fx-heart',
     items: [
-      { ch: '❤', x: 74, y: 22, d: 0, s: 0.8, c: '#f472b6' },
-      { ch: '✦', x: 24, y: 26, d: 0.5, s: 0.7, c: '#fde047' },
-      { ch: '❤', x: 66, y: 10, d: 1, s: 0.6, c: '#fb7185' },
+      { ch: '✦', x: 80, y: 20, d: 0.2, s: 0.6, c: '#fde047' },
+      { ch: '❤', x: 20, y: 24, d: 0.9, s: 0.6, c: '#f472b6' },
+    ],
+  },
+  pet: {
+    cls: 'fx-love',
+    items: [
+      { ch: '❤', x: 18, y: 30, d: 0, s: 0.9, c: '#f472b6' },
+      { ch: '❤', x: 76, y: 24, d: 0.35, s: 1.1, c: '#fb7185' },
+      { ch: '✦', x: 30, y: 12, d: 0.7, s: 0.6, c: '#fde68a' },
+      { ch: '❤', x: 64, y: 8, d: 1.05, s: 0.7, c: '#f9a8d4' },
+      { ch: '✦', x: 84, y: 44, d: 1.4, s: 0.5, c: '#fde68a' },
     ],
   },
   failed: {
@@ -77,6 +86,20 @@ export function PetFx({ anim, size }: { anim: PetAnim; size: number }) {
   const base = Math.max(10, size * 0.11);
   return (
     <div key={anim} className="pointer-events-none absolute inset-0 select-none">
+      {anim === 'pet' && (
+        <>
+          <span className="fx-blush" style={{ left: '30%', top: '40%', width: size * 0.12, height: size * 0.05 }} />
+          <span className="fx-blush" style={{ left: '58%', top: '40%', width: size * 0.12, height: size * 0.05 }} />
+          <span className="fx-hand" style={{ fontSize: base * 1.6, left: '50%', top: '-6%' }}>
+            🤚
+          </span>
+        </>
+      )}
+      {anim === 'wave' && (
+        <span className="fx-wavelines" style={{ fontSize: base * 1.1, right: '4%', top: '18%' }}>
+          ʚ
+        </span>
+      )}
       {fx.items.map((p, i) => (
         <span
           key={i}

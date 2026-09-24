@@ -170,13 +170,25 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     setPos(next);
   };
 
+  const clicks = useRef(0);
+  const clickReset = useRef<ReturnType<typeof setTimeout>>();
+
   const onPointerUp = () => {
     const moved = drag.current?.moved;
     drag.current = null;
     if (moved) {
       playOnce('jump', 700);
     } else {
-      playOnce('wave', 1500, `Привет! Я ${name}`);
+      clicks.current += 1;
+      if (clicks.current === 1) {
+        playOnce('wave', 1600, `Привет! Я ${name}`);
+      } else {
+        usePetStore.getState().pet();
+        const lines = ['Мррр…', 'Ещё!', 'Приятно!', 'Хи-хи!'];
+        playOnce('pet', 1400, lines[Math.floor(Math.random() * lines.length)]);
+      }
+      clearTimeout(clickReset.current);
+      clickReset.current = setTimeout(() => (clicks.current = 0), 4000);
     }
   };
 

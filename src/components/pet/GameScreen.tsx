@@ -4,6 +4,7 @@ import { ACTION_ANIM, type PetAnim } from './sprites';
 import { FloatingPet } from './FloatingPet';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetNotifications } from './useNotifications';
+import { usePetting } from './usePetting';
 import { usePetStore } from '@/store/petStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
@@ -34,9 +35,9 @@ export function GameScreen() {
   const { hasSelectedPet, hunger, happiness, energy, health, tick, type, level, stage, intelligence } = usePetStore();
   const [activeTab, setActiveTab] = useState<Tab>('actions');
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
-  const [poked, setPoked] = useState(false);
   const need = usePetNeed();
   usePetNotifications();
+  const petting = usePetting();
 
   useEffect(() => {
     const catchUp = usePetStore.getState().catchUp;
@@ -67,15 +68,9 @@ export function GameScreen() {
   }
 
   const mood = getMood(hunger, happiness, energy, health);
-  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : poked ? 'wave' : needAnim(need) ?? 'idle';
+  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
-
-  const poke = () => {
-    if (poked) return;
-    setPoked(true);
-    setTimeout(() => setPoked(false), 1600);
-  };
 
   return (
     <div className="pa-app flex flex-col">
@@ -123,16 +118,47 @@ export function GameScreen() {
 
             <div className="absolute inset-x-0 bottom-[9%] z-10 flex justify-center">
               <div className="relative">
-                {!currentAction && !poked && <PetEmotion need={need} />}
-                <button onClick={poke} className="cursor-pointer focus:outline-none transition-transform active:scale-95" title="Погладить">
+                {!currentAction && !petting.petting && !petting.bubble && <PetEmotion need={need} />}
+                {petting.bubble && (
+                  <div key={petting.bubble} className="pointer-events-none absolute -top-4 left-1/2 z-20 -translate-x-1/2 pa-pop">
+                    <div className="relative whitespace-nowrap rounded-2xl bg-white px-3.5 py-1.5 text-sm font-extrabold text-pink-600 shadow-[0_10px_30px_-10px_rgba(236,72,153,0.8)]">
+                      {petting.bubble}
+                      <span className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
+                    </div>
+                  </div>
+                )}
+                <div
+                  {...petting.handlers}
+                  className="relative cursor-grab touch-none select-none active:cursor-grabbing"
+                  title="Погладь меня!"
+                >
                   <PetSprite type={type} anim={anim} size={spriteSize} />
-                </button>
+                  {petting.hearts.map((h) => (
+                    <span
+                      key={h.id}
+                      className="pet-trail-heart"
+                      style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                    >
+                      ❤
+                    </span>
+                  ))}
+                </div>
+                {petting.love > 0 && (
+                  <div className="absolute -bottom-3 left-1/2 w-28 -translate-x-1/2">
+                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-pink-400 to-rose-500 shadow-[0_0_10px_rgba(244,114,182,0.8)] transition-all duration-300"
+                        style={{ width: `${petting.love}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 flex items-center gap-1.5 rounded-full bg-black/30 border border-white/10 px-3 py-1 text-[11px] font-semibold text-white/60 backdrop-blur">
               <Icon name="Hand" size={12} />
-              Нажми, чтобы погладить · Ур. {level}
+              {petting.love >= 100 ? 'Питомец на седьмом небе!' : 'Погладь — води мышкой по питомцу'} · Ур. {level}
             </div>
           </div>
 

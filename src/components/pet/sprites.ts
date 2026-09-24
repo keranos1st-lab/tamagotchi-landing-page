@@ -16,7 +16,8 @@ export type PetAnim =
   | 'eat'
   | 'sleep'
   | 'play'
-  | 'study';
+  | 'study'
+  | 'pet';
 
 export const CELL_W = 192;
 export const CELL_H = 208;
@@ -38,7 +39,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   idle: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   'run-right': { ...KODIK_MAIN, row: 1, frames: 8, fps: 12 },
   'run-left': { ...KODIK_MAIN, row: 2, frames: 8, fps: 12 },
-  wave: { ...KODIK_MAIN, row: 3, frames: 4, fps: 6 },
+  wave: { ...KODIK_MAIN, row: 3, frames: 4, fps: 9 },
   jump: { ...KODIK_MAIN, row: 4, frames: 5, fps: 9 },
   failed: { ...KODIK_MAIN, row: 5, frames: 8, fps: 8 },
   waiting: { ...KODIK_MAIN, row: 6, frames: 6, fps: 6 },
@@ -48,12 +49,13 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   sleep: { ...KODIK_CARE, row: 1, frames: 4, fps: 3 },
   play: { ...KODIK_CARE, row: 2, frames: 4, fps: 6 },
   study: { ...KODIK_CARE, row: 3, frames: 4, fps: 4 },
+  pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
 };
 
 function buildSheet(file: string): Record<PetAnim, SheetFrame> {
   const base = { src: u(`/pets/${file}`), cols: 4, rows: 8 };
   const idle = { ...base, row: 0, frames: 4, fps: 4 };
-  const wave = { ...base, row: 3, frames: 4, fps: 6 };
+  const wave = { ...base, row: 3, frames: 4, fps: 9 };
   const eat = { ...base, row: 4, frames: 4, fps: 5 };
   const sleep = { ...base, row: 5, frames: 4, fps: 3 };
   const play = { ...base, row: 6, frames: 4, fps: 6 };
@@ -72,6 +74,7 @@ function buildSheet(file: string): Record<PetAnim, SheetFrame> {
     sleep,
     play,
     study,
+    pet: { ...idle, frames: 1, fps: 1 },
   };
 }
 

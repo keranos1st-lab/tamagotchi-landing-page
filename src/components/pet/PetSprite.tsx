@@ -65,7 +65,9 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
       return { motion: 'pm-study', shadow: '' };
     case 'wave':
     case 'review':
-      return { motion: 'pm-wave', shadow: '' };
+      return { motion: 'pm-wave', shadow: 'pm-sh-wave' };
+    case 'pet':
+      return { motion: 'pm-pet', shadow: 'pm-sh-pet' };
     default:
       return { motion: '', shadow: '' };
   }
@@ -79,6 +81,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
 
   const seq = useMemo(() => {
     const isRun = anim === 'run-left' || anim === 'run-right';
+    if (anim === 'wave') return cfg.frames >= 4 ? [0, 1, 2, 3, 3, 2, 1, 2, 3, 3, 2, 1, 0, 0] : [0];
     if (cfg.cols === 4 && cfg.frames === 4 && !isRun) return [0, 1, 2, 3, 2, 1];
     return Array.from({ length: cfg.frames }, (_, i) => i);
   }, [cfg.frames, cfg.cols, anim]);
