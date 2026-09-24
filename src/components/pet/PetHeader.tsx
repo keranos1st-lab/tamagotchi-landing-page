@@ -1,14 +1,9 @@
 import { usePetStore } from '@/store/petStore';
-import type { PetType } from '@/store/petStore';
+import { PET_ICONS } from './sprites';
 import { PET_NAMES } from '@/store/petStore';
 
 export function PetHeader() {
-  const { name, type, level, exp, expToNext, stage } = usePetStore();
-
-  const petEmojis: Record<string, string> = {
-    cat: '🐱', dog: '🐕', bird: '🐦', fox: '🦊',
-    dragon: '🐉', bunny: '🐰', panda: '🐼', owl: '🦉',
-  };
+  const { name, type, level, exp, expToNext } = usePetStore();
 
   const expPercent = (exp / expToNext) * 100;
 
@@ -16,7 +11,7 @@ export function PetHeader() {
     <header className="bg-slate-900/80 backdrop-blur-sm border-b border-purple-500/20 px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-3xl">{petEmojis[type]}</div>
+          <img src={PET_ICONS[type]} alt="" className="w-11 h-11 object-contain" />
           <div>
             <h1 className="text-xl font-bold text-white">{name}</h1>
             <p className="text-xs text-purple-300">Уровень {level} • {PET_NAMES[type as keyof typeof PET_NAMES]}</p>

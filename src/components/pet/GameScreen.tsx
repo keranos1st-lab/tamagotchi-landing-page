@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Pet3D } from './Pet3D';
+import { PetSprite } from './PetSprite';
+import { ACTION_ANIM, type PetAnim } from './sprites';
+import { FloatingPet } from './FloatingPet';
 import { usePetStore } from '@/store/petStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
@@ -9,13 +11,13 @@ import { PetHeader } from './PetHeader';
 import { MiniGames } from './MiniGames';
 import { Achievements } from './Achievements';
 
-type ActionType = 'feed' | 'play' | 'train' | 'sleep' | 'heal' | null;
+import type { ActionType } from './sprites';
 
 export function GameScreen() {
   const { hasSelectedPet, hunger, happiness, energy, health, tick, type, level, stage } = usePetStore();
   const [activeTab, setActiveTab] = useState<'actions' | 'chat' | 'games'>('actions');
-  const [showOverlayInfo, setShowOverlayInfo] = useState(true);
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
+  const [poked, setPoked] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -39,26 +41,27 @@ export function GameScreen() {
   }
 
   const mood = getMood(hunger, happiness, energy, health);
+  const avg = (hunger + happiness + energy + health) / 4;
+  const anim: PetAnim = currentAction
+    ? ACTION_ANIM[currentAction]
+    : poked
+      ? 'wave'
+      : avg <= 25
+        ? 'failed'
+        : energy < 20
+          ? 'waiting'
+          : 'idle';
+  const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 260 : 220;
+
+  const poke = () => {
+    if (poked) return;
+    setPoked(true);
+    setTimeout(() => setPoked(false), 1600);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex flex-col">
-      {/* Overlay mode info banner */}
-      {showOverlayInfo && (
-        <div className="bg-gradient-to-r from-indigo-900/90 to-purple-900/90 border-b border-indigo-500/30 px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-lg">🖥️</span>
-            <span className="text-indigo-200">
-              <strong>Режим поверх окон:</strong> В десктоп-версии (Electron/Tauri) питомец будет отображаться поверх других приложений и может анализировать выделенный текст в любом окне.
-            </span>
-          </div>
-          <button
-            onClick={() => setShowOverlayInfo(false)}
-            className="text-indigo-300 hover:text-white transition p-1"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      <FloatingPet />
 
       {/* Header */}
       <PetHeader />
@@ -75,7 +78,13 @@ export function GameScreen() {
         <div className="flex-1 flex flex-col">
           <div className="flex-1 relative rounded-2xl overflow-hidden border border-purple-500/20 bg-gradient-to-b from-slate-900/50 to-indigo-950/50 min-h-[350px] flex items-center justify-center">
             {/* Pet with action animation */}
-            <Pet3D type={type} mood={mood} level={level} stage={stage} action={currentAction} />
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-56 h-8 rounded-[50%] bg-black/40 blur-md" />
+            <button onClick={poke} className="relative z-10 cursor-pointer focus:outline-none" title="Погладить">
+              <PetSprite type={type} anim={anim} size={spriteSize} />
+            </button>
+            <div className="absolute top-4 right-4 bg-slate-800/80 backdrop-blur-sm rounded-xl px-3 py-2 border border-purple-500/20 text-sm text-purple-200">
+              Lv.{level}
+            </div>
 
             {/* Mood indicator */}
             <div className="absolute top-4 left-4 bg-slate-800/80 backdrop-blur-sm rounded-xl px-3 py-2 border border-purple-500/20">

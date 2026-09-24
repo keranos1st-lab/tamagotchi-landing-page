@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { PetType, PET_NAMES, usePetStore } from '@/store/petStore';
+import { PetSprite } from './PetSprite';
 
 const PET_INFO: Record<PetType, { emoji: string; color: string; desc: string }> = {
-  cat: { emoji: '🐱', color: 'from-orange-500 to-amber-500', desc: 'Независимый и умный. Любит учиться!' },
+  cat: { emoji: '🐱', color: 'from-orange-500 to-amber-500', desc: 'Кодик — робо-кот. Независимый и умный!' },
   dog: { emoji: '🐕', color: 'from-amber-700 to-yellow-600', desc: 'Верный друг. Всегда поддержит!' },
   bird: { emoji: '🐦', color: 'from-blue-500 to-cyan-400', desc: 'Свободный дух. Знает много интересного!' },
   fox: { emoji: '🦊', color: 'from-orange-600 to-red-500', desc: 'Хитрый и мудрый. Даст лучший совет!' },
@@ -28,10 +29,10 @@ export function PetSelection() {
       <div className="max-w-4xl w-full">
         <div className="text-center mb-8">
           <h1 className="text-5xl font-bold text-white mb-3">
-            🎮 PetAgent
+            PetAgent
           </h1>
           <p className="text-xl text-purple-200">
-            Выбери своего 3D питомца-помощника!
+            Выбери своего питомца-помощника!
           </p>
           <p className="text-sm text-purple-300 mt-2">
             Корми, играй, обучай — и он станет твоим умным AI-помощником
@@ -52,8 +53,8 @@ export function PetSelection() {
                   : 'border-slate-700 bg-slate-800/50 hover:border-purple-500/50'
               }`}
             >
-              <div className={`text-5xl mb-2 bg-gradient-to-r ${PET_INFO[type].color} rounded-full w-20 h-20 flex items-center justify-center mx-auto`}>
-                <span className="text-4xl">{PET_INFO[type].emoji}</span>
+              <div className={`mb-2 bg-gradient-to-br ${PET_INFO[type].color} rounded-2xl h-32 flex items-end justify-center overflow-hidden`}>
+                <PetSprite type={type} anim={selectedType === type ? 'wave' : 'idle'} size={124} />
               </div>
               <h3 className="text-white font-bold text-lg">{PET_NAMES[type]}</h3>
               <p className="text-purple-300 text-xs mt-1">{PET_INFO[type].desc}</p>
