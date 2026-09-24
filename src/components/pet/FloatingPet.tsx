@@ -10,23 +10,38 @@ import { PetActionPill, PillButton } from './PetActionPill';
 const SIZE = 120;
 const SPEED = 90;
 
+type Pt = { x: number; y: number };
+
+const clampPos = (p: Pt): Pt => ({
+  x: Math.max(4, Math.min(window.innerWidth - SIZE - 4, p.x)),
+  y: Math.max(40, Math.min(window.innerHeight - SIZE - 48, p.y)),
+});
+
+const randomPoint = (from: Pt): Pt => {
+  const maxDist = Math.min(window.innerWidth, window.innerHeight) * 0.6;
+  const ang = Math.random() * Math.PI * 2;
+  const dist = 120 + Math.random() * maxDist;
+  return clampPos({ x: from.x + Math.cos(ang) * dist, y: from.y + Math.sin(ang) * dist });
+};
+
 function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHide: () => void; canPip: boolean }) {
   const type = usePetStore((s) => s.type);
   const name = usePetStore((s) => s.name);
   const need = usePetNeed();
   const moodAnim = needAnim(need);
 
-  const [x, setX] = useState(() => window.innerWidth - SIZE - 40);
-  const [y, setY] = useState(0);
+  const [pos, setPos] = useState<Pt>(() => clampPos({ x: window.innerWidth - SIZE - 40, y: window.innerHeight - SIZE - 60 }));
   const [anim, setAnim] = useState<PetAnim>('idle');
   const [hover, setHover] = useState(false);
   const [bubble, setBubble] = useState<string | null>(null);
 
-  const target = useRef<number | null>(null);
-  const drag = useRef<{ dx: number; dy: number; lastX: number } | null>(null);
+  const target = useRef<Pt | null>(null);
+  const drag = useRef<{ dx: number; dy: number; lastX: number; moved: boolean } | null>(null);
   const special = useRef<number>(0);
-  const xRef = useRef(x);
-  xRef.current = x;
+  const posRef = useRef(pos);
+  posRef.current = pos;
+  const tiredRef = useRef(false);
+  tiredRef.current = need === 'tired' || need === 'sick';
 
   useEffect(() => {
     let raf = 0;
@@ -34,16 +49,20 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     const loop = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
-      if (!drag.current && target.current !== null && special.current < t) {
-        const cur = xRef.current;
-        const diff = target.current - cur;
-        if (Math.abs(diff) < 4) {
+      const tgt = target.current;
+      if (!drag.current && tgt && special.current < t) {
+        const cur = posRef.current;
+        const dx = tgt.x - cur.x;
+        const dy = tgt.y - cur.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 4) {
           target.current = null;
           setAnim('idle');
         } else {
-          const step = Math.sign(diff) * Math.min(Math.abs(diff), SPEED * dt);
-          setX(cur + step);
-          setAnim(diff > 0 ? 'run-right' : 'run-left');
+          const speed = tiredRef.current ? SPEED * 0.5 : SPEED;
+          const k = Math.min(1, (speed * dt) / dist);
+          setPos({ x: cur.x + dx * k, y: cur.y + dy * k });
+          setAnim(dx >= 0 ? 'run-right' : 'run-left');
         }
       }
       raf = requestAnimationFrame(loop);
@@ -54,16 +73,19 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (drag.current || target.current !== null || special.current > performance.now() || hover) return;
-      if (Math.random() < 0.55) {
-        target.current = 20 + Math.random() * Math.max(0, window.innerWidth - SIZE - 40);
+      if (drag.current || target.current || special.current > performance.now() || hover) return;
+      if (Math.random() < (tiredRef.current ? 0.2 : 0.6)) {
+        target.current = randomPoint(posRef.current);
       }
-    }, 4000);
+    }, 3500);
     return () => clearInterval(id);
   }, [hover]);
 
   useEffect(() => {
-    const onResize = () => setX((v) => Math.min(v, window.innerWidth - SIZE - 10));
+    const onResize = () => {
+      setPos((p) => clampPos(p));
+      if (target.current) target.current = clampPos(target.current);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
@@ -80,42 +102,38 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { dx: e.clientX - x, dy: e.clientY, lastX: e.clientX };
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y, lastX: e.clientX, moved: false };
     target.current = null;
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
     const d = drag.current;
     if (!d) return;
-    const nx = Math.max(0, Math.min(window.innerWidth - SIZE, e.clientX - d.dx));
-    const ny = Math.max(0, Math.min(window.innerHeight - SIZE - 20, d.dy - e.clientY + y));
+    const next = clampPos({ x: e.clientX - d.dx, y: e.clientY - d.dy });
+    if (Math.hypot(next.x - pos.x, next.y - pos.y) > 2) d.moved = true;
     if (Math.abs(e.clientX - d.lastX) > 1) setAnim(e.clientX > d.lastX ? 'run-right' : 'run-left');
     d.lastX = e.clientX;
-    d.dy = e.clientY;
-    setX(nx);
-    setY(ny);
+    setPos(next);
   };
 
   const onPointerUp = () => {
-    const wasDragged = y > 4 || anim.startsWith('run');
+    const moved = drag.current?.moved;
     drag.current = null;
-    if (y > 0) {
-      setY(0);
+    if (moved) {
       playOnce('jump', 700);
-    } else if (!wasDragged) {
-      playOnce('wave', 1500, `Привет! Я ${name}`);
     } else {
-      setAnim('idle');
+      playOnce('wave', 1500, `Привет! Я ${name}`);
     }
   };
 
   const shownAnim: PetAnim = anim === 'idle' && moodAnim ? moodAnim : anim;
+  const nearBottom = pos.y > window.innerHeight - SIZE - 110;
 
   return (
     <div
       className="fixed z-[60] select-none"
-      style={{ left: x, bottom: 44 + y, width: SIZE, transition: drag.current ? 'none' : 'bottom 0.35s cubic-bezier(.5,0,.8,.4)' }}
+      style={{ left: pos.x, top: pos.y, width: SIZE }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -126,7 +144,9 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       )}
       {!bubble && !hover && <PetEmotion need={need} compact />}
       {hover && !bubble && (
-        <div className="absolute -bottom-9 left-1/2 -translate-x-1/2 z-10 animate-fadeIn">
+        <div
+          className={`absolute left-1/2 -translate-x-1/2 z-10 animate-fadeIn ${nearBottom ? '-top-11' : '-bottom-9'}`}
+        >
           <PetActionPill
             onAction={(a) => playOnce(a, 2400)}
             extra={
