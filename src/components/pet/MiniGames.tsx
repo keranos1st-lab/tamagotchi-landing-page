@@ -1,5 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { usePetStore } from '@/store/petStore';
+import { usePetStore, type PetType } from '@/store/petStore';
+import { PetSprite } from './PetSprite';
+import { PET_ICONS, type PetAnim } from './sprites';
+
+function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
+  const type = usePetStore((s) => s.type);
+  return <PetSprite type={type} anim={anim} size={size} />;
+}
 
 type MiniGame = 'none' | 'catch' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction';
 
@@ -20,7 +27,7 @@ export function MiniGames() {
     { id: 'catch' as MiniGame, icon: '🍖', name: 'Ловля еды', desc: 'Рефлексы', reward: '+15 IQ', color: 'from-orange-500 to-amber-500' },
     { id: 'memory' as MiniGame, icon: '🃏', name: 'Мемори', desc: 'Память', reward: '+20 IQ', color: 'from-blue-500 to-cyan-500' },
     { id: 'quiz' as MiniGame, icon: '🧠', name: 'Викторина', desc: 'Знания', reward: '+25 IQ', color: 'from-purple-500 to-pink-500' },
-    { id: 'snake' as MiniGame, icon: '🐍', name: 'Змейка', desc: 'Классика', reward: '+30 IQ', color: 'from-green-500 to-emerald-500' },
+    { id: 'snake' as MiniGame, icon: '🐍', name: 'Змейка', desc: 'Питомец собирает хвост', reward: '+30 IQ', color: 'from-green-500 to-emerald-500' },
     { id: 'tictactoe' as MiniGame, icon: '⭕', name: 'Крестики-нолики', desc: 'Стратегия', reward: '+20 IQ', color: 'from-red-500 to-rose-500' },
     { id: 'reaction' as MiniGame, icon: '⚡', name: 'Реакция', desc: 'Скорость', reward: '+15 IQ', color: 'from-yellow-500 to-orange-500' },
   ];
@@ -65,6 +72,13 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
   const [gameOver, setGameOver] = useState(false);
   const { gainExp } = usePetStore();
   const nextId = useRef(0);
+  const [petAnim, setPetAnim] = useState<PetAnim>('idle');
+  const animTimer = useRef<ReturnType<typeof setTimeout>>();
+  const react = (a: PetAnim) => {
+    setPetAnim(a);
+    clearTimeout(animTimer.current);
+    animTimer.current = setTimeout(() => setPetAnim('idle'), 900);
+  };
 
   const goodItems = ['🍖', '🍎', '🐟', '🥕', '🍪', '🧀'];
   const badItems = ['💣', '🌶️', '🗑️', '☠️'];
@@ -121,8 +135,10 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
     setItems(prev => prev.filter(item => item.id !== id));
     if (type === 'good') {
       setScore(s => s + 10);
+      react('eat');
     } else {
       setScore(s => Math.max(0, s - 15));
+      react('failed');
     }
   };
 
@@ -154,10 +170,13 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
               {item.emoji}
             </button>
           ))}
+          <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2">
+            <MyPet anim={petAnim} size={90} />
+          </div>
         </div>
       ) : (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">🎉</div>
+          <div className="flex justify-center mb-2"><MyPet anim="play" /></div>
           <p className="text-white text-lg font-bold mb-2">Результат: {score} очков</p>
           <p className="text-purple-300 text-sm mb-4">+{Math.floor(score / 2)} опыта питомцу!</p>
           <button
@@ -174,7 +193,7 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
 
 // ========== ИГРА 2: МЕМОРИ ==========
 function MemoryGame({ onComplete }: { onComplete: () => void }) {
-  const emojis = ['🐱', '🐕', '🐦', '🦊', '🐉', '🐰', '🐼', '🦉'];
+  const emojis = Object.keys(PET_ICONS) as PetType[];
   const [cards, setCards] = useState<Array<{ id: number; emoji: string; flipped: boolean; matched: boolean }>>([]);
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
@@ -247,13 +266,17 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
                   : 'bg-slate-700 hover:bg-slate-600 hover:scale-105'
               } ${card.matched ? 'opacity-50' : ''}`}
             >
-              {card.flipped || card.matched ? card.emoji : '?'}
+              {card.flipped || card.matched ? (
+                <img src={PET_ICONS[card.emoji as PetType]} alt="" className="w-4/5 h-4/5 object-contain" draggable={false} />
+              ) : (
+                <span className="text-purple-300">?</span>
+              )}
             </button>
           ))}
         </div>
       ) : (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">🎊</div>
+          <div className="flex justify-center mb-2"><MyPet anim="play" /></div>
           <p className="text-white text-lg font-bold mb-2">Победа за {moves} ходов!</p>
           <p className="text-purple-300 text-sm mb-4">+{Math.max(10, 50 - moves * 2)} опыта!</p>
           <button
@@ -344,7 +367,7 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
         </>
       ) : (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">🏆</div>
+          <div className="flex justify-center mb-2"><MyPet anim="study" /></div>
           <p className="text-white text-lg font-bold mb-2">Результат: {score}/{questions.length}</p>
           <p className="text-purple-300 text-sm mb-4">+{score * 5} опыта!</p>
           <button
@@ -464,13 +487,23 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
             </div>
 
             {/* Snake */}
-            {snake.map((segment, i) => (
-              <div
-                key={i}
-                className={`absolute w-[5%] h-[5%] rounded-sm ${i === 0 ? 'bg-green-400' : 'bg-green-500'}`}
-                style={{ left: `${segment.x * 5}%`, top: `${segment.y * 5}%` }}
-              />
-            ))}
+            {snake.map((segment, i) =>
+              i === 0 ? (
+                <div
+                  key={i}
+                  className="absolute w-[9%] h-[9%] z-10"
+                  style={{ left: `${segment.x * 5 - 2}%`, top: `${segment.y * 5 - 2}%` }}
+                >
+                  <TttPet />
+                </div>
+              ) : (
+                <div
+                  key={i}
+                  className="absolute w-[5%] h-[5%] rounded-full bg-purple-400/80 scale-75"
+                  style={{ left: `${segment.x * 5}%`, top: `${segment.y * 5}%` }}
+                />
+              ),
+            )}
 
             {/* Food */}
             <div
@@ -491,7 +524,7 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
         </>
       ) : (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">💀</div>
+          <div className="flex justify-center mb-2"><MyPet anim="failed" /></div>
           <p className="text-white text-lg font-bold mb-2">Длина змейки: {snake.length}</p>
           <p className="text-purple-300 text-sm mb-4">+{Math.floor(score / 2)} опыта!</p>
           <button
@@ -598,10 +631,17 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
   return (
     <div className="space-y-3">
       <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Вы: ✕ | Питомец: ○</span>
+        <span className="text-purple-200 text-sm">Вы: ✕ | Питомец</span>
         <span className="text-purple-300 text-xs">
           {winner ? (winner === 'X' ? '🎉 Победа!' : winner === 'O' ? '😢 Поражение' : '🤝 Ничья') : isPlayerTurn ? 'Ваш ход' : 'Ход питомца...'}
         </span>
+      </div>
+
+      <div className="flex justify-center">
+        <MyPet
+          size={90}
+          anim={winner === 'O' ? 'play' : winner === 'X' ? 'failed' : winner === 'draw' ? 'wave' : isPlayerTurn ? 'idle' : 'study'}
+        />
       </div>
 
       <div className="grid grid-cols-3 gap-2 max-w-[250px] mx-auto">
@@ -612,7 +652,11 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
             className="aspect-square bg-slate-700 hover:bg-slate-600 rounded-xl text-4xl font-bold transition-all disabled:cursor-not-allowed"
             disabled={!!cell || !!winner || !isPlayerTurn}
           >
-            <span className={cell === 'X' ? 'text-blue-400' : 'text-pink-400'}>{cell}</span>
+            {cell === 'O' ? (
+              <TttPet />
+            ) : (
+              <span className="text-blue-400">{cell}</span>
+            )}
           </button>
         ))}
       </div>
@@ -705,7 +749,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
 
       {gameState === 'done' ? (
         <div className="text-center py-8">
-          <div className="text-4xl mb-3">⚡</div>
+          <div className="flex justify-center mb-2"><MyPet anim="wave" /></div>
           <p className="text-white text-lg font-bold mb-2">Лучшее время: {bestTime}мс</p>
           <p className="text-purple-300 text-sm mb-4">+{Math.max(10, Math.floor(1000 / (bestTime || 1)))} опыта!</p>
           <button
@@ -741,4 +785,9 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
       )}
     </div>
   );
+}
+
+function TttPet() {
+  const type = usePetStore((s) => s.type);
+  return <img src={PET_ICONS[type]} alt="" className="w-4/5 h-4/5 object-contain mx-auto" draggable={false} />;
 }

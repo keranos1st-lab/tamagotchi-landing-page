@@ -1,9 +1,15 @@
 import { usePetStore } from '@/store/petStore';
 import { PET_ICONS } from './sprites';
+import Icon from '@/components/ui/icon';
+import { NotifyToggle } from './NotifyToggle';
 import { PET_NAMES } from '@/store/petStore';
 
 export function PetHeader() {
-  const { name, type, level, exp, expToNext } = usePetStore();
+  const { name, type, level, exp, expToNext, resetPet } = usePetStore();
+
+  const onReset = () => {
+    if (confirm(`Завести нового питомца? ${name} и весь прогресс будут потеряны.`)) resetPet();
+  };
 
   const expPercent = (exp / expToNext) * 100;
 
@@ -29,6 +35,15 @@ export function PetHeader() {
               />
             </div>
           </div>
+
+          <NotifyToggle />
+          <button
+            onClick={onReset}
+            title="Сменить питомца"
+            className="rounded-full p-2 text-purple-300 hover:bg-slate-800 hover:text-white transition"
+          >
+            <Icon name="RefreshCw" size={18} />
+          </button>
 
           {/* Level badge */}
           <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-full px-4 py-1">

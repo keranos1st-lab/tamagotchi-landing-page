@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export type PetType = 'cat' | 'dog' | 'bird' | 'fox' | 'dragon' | 'bunny' | 'panda' | 'owl';
 
@@ -39,6 +40,9 @@ export interface PetState {
   addChatMessage: (role: 'user' | 'pet', text: string) => void;
   tick: () => void;
   gainExp: (amount: number) => void;
+  catchUp: () => void;
+  resetPet: () => void;
+  lastTick: number;
 }
 
 const PET_NAMES: Record<PetType, string> = {
@@ -54,7 +58,10 @@ const PET_NAMES: Record<PetType, string> = {
 
 export { PET_NAMES };
 
-export const usePetStore = create<PetState>((set, get) => ({
+export const usePetStore = create<PetState>()(
+  persist(
+    (set, get) => ({
+  lastTick: Date.now(),
   name: '',
   type: 'cat',
   level: 1,
@@ -157,13 +164,12 @@ export const usePetStore = create<PetState>((set, get) => ({
     const state = get();
     if (!state.hasSelectedPet) return;
 
-    const timeSinceInteraction = (Date.now() - state.lastInteraction) / 1000 / 60; // minutes
-
     set({
       hunger: Math.max(0, state.hunger - 0.3),
       happiness: Math.max(0, state.happiness - 0.2),
       energy: Math.min(100, state.energy + 0.1),
       age: state.age + 1,
+      lastTick: Date.now(),
     });
 
     // Health decreases if hunger or happiness is very low
@@ -203,4 +209,29 @@ export const usePetStore = create<PetState>((set, get) => ({
       stage: newStage,
     });
   },
-}));
+
+  catchUp: () => {
+    const s = get();
+    if (!s.hasSelectedPet) return set({ lastTick: Date.now() });
+    const ticks = Math.min(Math.floor((Date.now() - s.lastTick) / 5000), 12 * 60 * 6);
+    if (ticks <= 0) return;
+    const hunger = Math.max(0, s.hunger - 0.3 * ticks * 0.5);
+    const happiness = Math.max(0, s.happiness - 0.2 * ticks * 0.5);
+    const energy = Math.min(100, s.energy + 0.1 * ticks);
+    const starving = hunger < 20 || happiness < 20;
+    const health = starving ? Math.max(5, s.health - 0.1 * ticks) : s.health;
+    set({ hunger, happiness, energy, health, age: s.age + Math.floor(ticks / 12), lastTick: Date.now() });
+  },
+
+  resetPet: () => set({ hasSelectedPet: false, chatHistory: [], isAlive: true, age: 0 }),
+    }),
+    {
+      name: 'petagent-save',
+      version: 1,
+      partialize: (s) => {
+        const { chatHistory, ...rest } = s;
+        return { ...rest, chatHistory: chatHistory.slice(-50) };
+      },
+    },
+  ),
+);

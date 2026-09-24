@@ -3,6 +3,7 @@ import { PetSprite } from './PetSprite';
 import { ACTION_ANIM, type PetAnim } from './sprites';
 import { FloatingPet } from './FloatingPet';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
+import { usePetNotifications } from './useNotifications';
 import { usePetStore } from '@/store/petStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
@@ -20,6 +21,15 @@ export function GameScreen() {
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
   const [poked, setPoked] = useState(false);
   const need = usePetNeed();
+  usePetNotifications();
+
+  useEffect(() => {
+    const catchUp = usePetStore.getState().catchUp;
+    catchUp();
+    const onVisible = () => document.visibilityState === 'visible' && catchUp();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {

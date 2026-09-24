@@ -1,4 +1,4 @@
-import { usePetStore } from '@/store/petStore';
+import { usePetStore, type PetState } from '@/store/petStore';
 import { useState } from 'react';
 
 interface Achievement {
@@ -6,7 +6,7 @@ interface Achievement {
   title: string;
   desc: string;
   icon: string;
-  check: (state: any) => boolean;
+  check: (state: PetState) => boolean;
 }
 
 const ACHIEVEMENTS: Achievement[] = [
