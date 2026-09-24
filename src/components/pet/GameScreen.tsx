@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PetSprite } from './PetSprite';
 import { ACTION_ANIM, type PetAnim } from './sprites';
 import { FloatingPet } from './FloatingPet';
+import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetStore } from '@/store/petStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
@@ -18,6 +19,7 @@ export function GameScreen() {
   const [activeTab, setActiveTab] = useState<'actions' | 'chat' | 'games'>('actions');
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
   const [poked, setPoked] = useState(false);
+  const need = usePetNeed();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -41,16 +43,7 @@ export function GameScreen() {
   }
 
   const mood = getMood(hunger, happiness, energy, health);
-  const avg = (hunger + happiness + energy + health) / 4;
-  const anim: PetAnim = currentAction
-    ? ACTION_ANIM[currentAction]
-    : poked
-      ? 'wave'
-      : avg <= 25
-        ? 'failed'
-        : energy < 20
-          ? 'sleep'
-          : 'idle';
+  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : poked ? 'wave' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 260 : 220;
 
   const poke = () => {
@@ -79,9 +72,12 @@ export function GameScreen() {
           <div className="flex-1 relative rounded-2xl overflow-hidden border border-purple-500/20 bg-gradient-to-b from-slate-900/50 to-indigo-950/50 min-h-[350px] flex items-center justify-center">
             {/* Pet with action animation */}
             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-56 h-8 rounded-[50%] bg-black/40 blur-md" />
-            <button onClick={poke} className="relative z-10 cursor-pointer focus:outline-none" title="Погладить">
-              <PetSprite type={type} anim={anim} size={spriteSize} />
-            </button>
+            <div className="relative z-10">
+              {!currentAction && !poked && <PetEmotion need={need} />}
+              <button onClick={poke} className="cursor-pointer focus:outline-none" title="Погладить">
+                <PetSprite type={type} anim={anim} size={spriteSize} />
+              </button>
+            </div>
             <div className="absolute top-4 right-4 bg-slate-800/80 backdrop-blur-sm rounded-xl px-3 py-2 border border-purple-500/20 text-sm text-purple-200">
               Lv.{level}
             </div>

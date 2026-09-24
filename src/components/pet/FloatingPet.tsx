@@ -4,22 +4,17 @@ import Icon from '@/components/ui/icon';
 import { PetSprite } from './PetSprite';
 import type { PetAnim } from './sprites';
 import { getPipApi, openPipWindow, PipPortal } from './PipWindow';
+import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
+import { PetActionPill, PillButton } from './PetActionPill';
 
 const SIZE = 120;
 const SPEED = 90;
 
-function usePetMood() {
-  const { hunger, happiness, energy, health } = usePetStore();
-  const avg = (hunger + happiness + energy + health) / 4;
-  if (avg <= 25) return 'failed' as const;
-  if (energy < 20) return 'sleep' as const;
-  return null;
-}
-
 function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHide: () => void; canPip: boolean }) {
   const type = usePetStore((s) => s.type);
   const name = usePetStore((s) => s.name);
-  const moodAnim = usePetMood();
+  const need = usePetNeed();
+  const moodAnim = needAnim(need);
 
   const [x, setX] = useState(() => window.innerWidth - SIZE - 40);
   const [y, setY] = useState(0);
@@ -120,7 +115,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   return (
     <div
       className="fixed z-[60] select-none"
-      style={{ left: x, bottom: 8 + y, width: SIZE, transition: drag.current ? 'none' : 'bottom 0.35s cubic-bezier(.5,0,.8,.4)' }}
+      style={{ left: x, bottom: 44 + y, width: SIZE, transition: drag.current ? 'none' : 'bottom 0.35s cubic-bezier(.5,0,.8,.4)' }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -129,24 +124,20 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
           {bubble}
         </div>
       )}
+      {!bubble && !hover && <PetEmotion need={need} compact />}
       {hover && !bubble && (
-        <div className="absolute -top-9 left-1/2 -translate-x-1/2 flex gap-1 animate-fadeIn">
-          {canPip && (
-            <button
-              onClick={onOpenPip}
-              title="Открыть поверх всех окон"
-              className="rounded-lg bg-slate-800/90 p-1.5 text-white hover:bg-purple-600 transition"
-            >
-              <Icon name="PictureInPicture2" size={16} />
-            </button>
-          )}
-          <button
-            onClick={onHide}
-            title="Спрятать"
-            className="rounded-lg bg-slate-800/90 p-1.5 text-white hover:bg-red-500 transition"
-          >
-            <Icon name="EyeOff" size={16} />
-          </button>
+        <div className="absolute -bottom-9 left-1/2 -translate-x-1/2 z-10 animate-fadeIn">
+          <PetActionPill
+            onAction={(a) => playOnce(a, 2400)}
+            extra={
+              <>
+                {canPip && (
+                  <PillButton title="Открыть поверх всех окон" icon="PictureInPicture2" onClick={onOpenPip} />
+                )}
+                <PillButton title="Спрятать" icon="EyeOff" onClick={onHide} />
+              </>
+            }
+          />
         </div>
       )}
       <div
@@ -162,61 +153,31 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
 }
 
 function PipPet() {
-  const { type, name, hunger, happiness, energy, feed, play, sleep, train } = usePetStore();
-  const moodAnim = usePetMood();
+  const type = usePetStore((s) => s.type);
+  const need = usePetNeed();
   const [anim, setAnim] = useState<PetAnim | null>(null);
+  const [hover, setHover] = useState(false);
 
-  const act = (a: PetAnim, fn: () => void) => {
-    fn();
+  const play = (a: PetAnim) => {
     setAnim(a);
     setTimeout(() => setAnim(null), 2400);
   };
 
-  const bar = (label: string, v: number, color: string) => (
-    <div className="flex items-center gap-2 text-[11px] text-slate-300">
-      <span className="w-16">{label}</span>
-      <div className="h-1.5 flex-1 rounded-full bg-slate-700 overflow-hidden">
-        <div className={`h-full ${color}`} style={{ width: `${v}%` }} />
-      </div>
-    </div>
-  );
-
   return (
-    <div className="h-screen w-full bg-gradient-to-b from-slate-900 to-indigo-950 flex flex-col items-center justify-between p-3 font-sans">
-      <div className="text-sm font-bold text-white">{name}</div>
-      <button onClick={() => act('wave', () => {})} className="focus:outline-none">
-        <PetSprite type={type} anim={anim ?? moodAnim ?? 'idle'} size={150} />
-      </button>
-      <div className="w-full space-y-1">
-        {bar('Сытость', hunger, 'bg-orange-400')}
-        {bar('Радость', happiness, 'bg-pink-400')}
-        {bar('Энергия', energy, 'bg-sky-400')}
+    <div
+      className="relative h-screen w-full overflow-hidden flex flex-col items-center justify-center select-none"
+      style={{ background: 'radial-gradient(circle at 50% 60%, #312e81 0%, #1e1b4b 55%, #0f0d2e 100%)' }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+    >
+      <div className="relative mt-4">
+        <PetEmotion need={need} />
+        <button onClick={() => play('wave')} className="focus:outline-none">
+          <PetSprite type={type} anim={anim ?? needAnim(need) ?? 'idle'} size={130} />
+        </button>
       </div>
-      <div className="grid w-full grid-cols-2 gap-1.5 mt-2">
-        <button
-          onClick={() => act('eat', feed)}
-          className="rounded-lg bg-orange-500 py-1.5 text-xs font-semibold text-white hover:bg-orange-400"
-        >
-          Покормить
-        </button>
-        <button
-          onClick={() => act('play', play)}
-          className="rounded-lg bg-purple-600 py-1.5 text-xs font-semibold text-white hover:bg-purple-500"
-        >
-          Играть
-        </button>
-        <button
-          onClick={() => act('sleep', sleep)}
-          className="rounded-lg bg-sky-600 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
-        >
-          Спать
-        </button>
-        <button
-          onClick={() => act('study', train)}
-          className="rounded-lg bg-emerald-600 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
-        >
-          Учиться
-        </button>
+      <div className={`mt-1 transition-opacity ${hover ? 'opacity-100' : 'opacity-0'}`}>
+        <PetActionPill onAction={play} />
       </div>
     </div>
   );
@@ -228,7 +189,7 @@ export function FloatingPet() {
   const canPip = !!getPipApi();
 
   const openPip = async () => {
-    const win = await openPipWindow();
+    const win = await openPipWindow(220, 230);
     if (!win) return;
     win.addEventListener('pagehide', () => setPipWin(null));
     setPipWin(win);

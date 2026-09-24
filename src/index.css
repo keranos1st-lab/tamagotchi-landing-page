@@ -595,3 +595,7 @@
 
 .pet-sad { filter: saturate(0.55) brightness(0.9); animation: petSad 1.6s ease-in-out infinite; transform-origin: 50% 100%; }
 @keyframes petSad { 0%,100% { transform: scale(1,0.96) translateX(0); } 25% { transform: scale(1,0.96) translateX(-2%); } 75% { transform: scale(1,0.96) translateX(2%); } }
+.pet-bubble { animation: petBubble 2.2s ease-in-out infinite; transform-origin: 20% 100%; }
+@keyframes petBubble { 0%,100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.05); } }
+.pet-heart { animation: petHeart 1.6s ease-in-out infinite; }
+@keyframes petHeart { 0% { transform: translateY(4px) scale(0.8); opacity: 0; } 30% { opacity: 1; } 100% { transform: translateY(-18px) scale(1.1); opacity: 0; } }
