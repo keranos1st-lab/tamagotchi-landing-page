@@ -800,3 +800,129 @@
 @keyframes paShine { 0%, 60% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 @keyframes paTwinkle { 0%, 100% { opacity: .15; transform: scale(.8); } 50% { opacity: .9; transform: scale(1.2); } }
 .pa-star { position: absolute; width: 3px; height: 3px; border-radius: 9999px; background: white; animation: paTwinkle 3s ease-in-out infinite; }
+
+/* ================= Pet motion system ================= */
+.pm-layer { transform-origin: 50% 100%; will-change: transform; }
+.pm-enter { animation: pmEnter .35s cubic-bezier(.2,1.5,.4,1); }
+@keyframes pmEnter { 0% { transform: scale(.92,1.08); } 60% { transform: scale(1.04,.97); } 100% { transform: scale(1); } }
+
+.pm-shadow {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0,0,0,.45), rgba(0,0,0,0));
+  pointer-events: none;
+}
+
+/* --- idle: breathing personalities --- */
+.pm-idle-cat    { animation: pmBreathe 3.2s ease-in-out infinite; }
+.pm-idle-panda  { animation: pmBreatheHeavy 4.2s ease-in-out infinite; }
+.pm-idle-fox    { animation: pmSway 3.6s ease-in-out infinite; }
+.pm-idle-owl    { animation: pmOwl 4.4s ease-in-out infinite; }
+.pm-idle-dog    { animation: pmBounce .9s ease-in-out infinite; }
+.pm-idle-bunny  { animation: pmBunny 2.4s cubic-bezier(.3,0,.3,1) infinite; }
+.pm-idle-bird   { animation: pmHover 1.6s ease-in-out infinite; }
+.pm-idle-dragon { animation: pmDragon 3.4s ease-in-out infinite; }
+
+@keyframes pmBreathe { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.025,.975); } }
+@keyframes pmBreatheHeavy { 0%,100% { transform: scale(1,1) rotate(0); } 30% { transform: scale(1.04,.96) rotate(-1deg); } 70% { transform: scale(1.04,.96) rotate(1deg); } }
+@keyframes pmSway { 0%,100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg) translateY(-1%); } }
+@keyframes pmOwl { 0%,40%,100% { transform: rotate(0) scale(1); } 50% { transform: rotate(-6deg) scale(1.01); } 60% { transform: rotate(-6deg); } 70% { transform: rotate(5deg); } 80% { transform: rotate(5deg); } 90% { transform: rotate(0); } }
+@keyframes pmBounce { 0%,100% { transform: translateY(0) scale(1.02,.98); } 50% { transform: translateY(-3%) scale(.99,1.01); } }
+@keyframes pmBunny {
+  0%,55%,100% { transform: translateY(0) scale(1,1); }
+  62% { transform: translateY(0) scale(1.08,.9); }
+  72% { transform: translateY(-12%) scale(.94,1.07); }
+  82% { transform: translateY(0) scale(1.06,.93); }
+  90% { transform: translateY(0) scale(1,1); }
+}
+@keyframes pmHover { 0%,100% { transform: translateY(-4%) rotate(-2deg); } 50% { transform: translateY(-9%) rotate(2deg); } }
+@keyframes pmDragon { 0%,100% { transform: translateY(-3%) scale(1); } 50% { transform: translateY(-7%) scale(1.02,.99); } }
+
+.pm-sh-dog    { animation: pmShBounce .9s ease-in-out infinite; }
+.pm-sh-bunny  { animation: pmShBunny 2.4s cubic-bezier(.3,0,.3,1) infinite; }
+.pm-sh-bird   { animation: pmShHover 1.6s ease-in-out infinite; }
+.pm-sh-dragon { animation: pmShHover 3.4s ease-in-out infinite; }
+@keyframes pmShBounce { 0%,100% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(.9); opacity: .8; } }
+@keyframes pmShBunny { 0%,55%,90%,100% { transform: translateX(-50%) scale(1); opacity: 1; } 72% { transform: translateX(-50%) scale(.6); opacity: .5; } }
+@keyframes pmShHover { 0%,100% { transform: translateX(-50%) scale(.8); opacity: .6; } 50% { transform: translateX(-50%) scale(.65); opacity: .4; } }
+
+/* --- run / fly --- */
+.pm-run-r { animation: pmRunR .32s ease-in-out infinite; }
+.pm-run-l { animation: pmRunL .32s ease-in-out infinite; }
+@keyframes pmRunR { 0%,100% { transform: translateY(0) rotate(4deg) scale(1.03,.97); } 50% { transform: translateY(-5%) rotate(6deg) scale(.98,1.02); } }
+@keyframes pmRunL { 0%,100% { transform: translateY(0) rotate(-4deg) scale(1.03,.97); } 50% { transform: translateY(-5%) rotate(-6deg) scale(.98,1.02); } }
+.pm-fly-r { animation: pmFlyR .7s ease-in-out infinite; }
+.pm-fly-l { animation: pmFlyL .7s ease-in-out infinite; }
+@keyframes pmFlyR { 0%,100% { transform: translateY(-8%) rotate(8deg); } 50% { transform: translateY(-14%) rotate(12deg); } }
+@keyframes pmFlyL { 0%,100% { transform: translateY(-8%) rotate(-8deg); } 50% { transform: translateY(-14%) rotate(-12deg); } }
+.pm-sh-run { animation: pmShBounce .32s ease-in-out infinite; }
+.pm-sh-fly { transform: translateX(-50%) scale(.6); opacity: .45; }
+
+/* --- actions --- */
+.pm-jump { animation: pmJump .75s cubic-bezier(.3,0,.3,1) infinite; }
+@keyframes pmJump {
+  0%,100% { transform: translateY(0) scale(1.1,.88); }
+  20% { transform: translateY(0) scale(.92,1.1); }
+  50% { transform: translateY(-28%) scale(.97,1.04) rotate(-4deg); }
+  80% { transform: translateY(0) scale(1.08,.92); }
+}
+.pm-sh-jump { animation: pmShJump .75s cubic-bezier(.3,0,.3,1) infinite; }
+@keyframes pmShJump { 0%,20%,80%,100% { transform: translateX(-50%) scale(1); opacity: 1; } 50% { transform: translateX(-50%) scale(.5); opacity: .35; } }
+
+.pm-play { animation: pmPlay 1s ease-in-out infinite; }
+@keyframes pmPlay {
+  0%,100% { transform: translateY(0) rotate(0) scale(1.05,.95); }
+  25% { transform: translateY(-12%) rotate(-8deg) scale(.97,1.03); }
+  50% { transform: translateY(0) rotate(0) scale(1.05,.95); }
+  75% { transform: translateY(-12%) rotate(8deg) scale(.97,1.03); }
+}
+.pm-sh-play { animation: pmShPlay 1s ease-in-out infinite; }
+@keyframes pmShPlay { 0%,50%,100% { transform: translateX(-50%) scale(1); } 25%,75% { transform: translateX(-50%) scale(.7); opacity: .6; } }
+
+.pm-eat { animation: pmEat .5s ease-in-out infinite; }
+@keyframes pmEat { 0%,100% { transform: scale(1,1) rotate(0); } 50% { transform: scale(1.04,.95) rotate(1.5deg); } }
+
+.pm-sleep { animation: pmSleep 3.4s ease-in-out infinite; }
+@keyframes pmSleep { 0%,100% { transform: scale(1,1); filter: brightness(.9) saturate(.9); } 50% { transform: scale(1.04,.95); filter: brightness(.82) saturate(.85); } }
+
+.pm-study { animation: pmStudy 2.4s ease-in-out infinite; }
+@keyframes pmStudy { 0%,100% { transform: rotate(0); } 20% { transform: rotate(-3deg); } 30% { transform: rotate(-3deg) translateY(-1%); } 55% { transform: rotate(2deg); } 75% { transform: rotate(0) translateY(-2%); } }
+
+.pm-wave { animation: pmWave .8s ease-in-out infinite; }
+@keyframes pmWave { 0%,100% { transform: rotate(-3deg) translateY(0); } 50% { transform: rotate(3deg) translateY(-3%); } }
+
+/* --- random idle fidgets --- */
+.pm-f-tilt    { animation: pmFTilt 1.3s ease-in-out; }
+.pm-f-stretch { animation: pmFStretch 1.3s ease-in-out; }
+.pm-f-look    { animation: pmFLook 1.3s ease-in-out; }
+.pm-f-hop     { animation: pmFHop .9s cubic-bezier(.3,0,.3,1); }
+.pm-f-shake   { animation: pmFShake 1s ease-in-out; }
+.pm-f-flip    { animation: pmFFlip 1.3s ease-in-out; }
+.pm-f-owl     { animation: pmFOwl 1.3s ease-in-out; }
+.pm-f-roll    { animation: pmFRoll 1.3s ease-in-out; }
+@keyframes pmFTilt { 0%,100% { transform: rotate(0); } 30%,70% { transform: rotate(-10deg); } }
+@keyframes pmFStretch { 0%,100% { transform: scale(1); } 35% { transform: scale(.94,1.1); } 55% { transform: scale(1.06,.94); } 75% { transform: scale(.98,1.03); } }
+@keyframes pmFLook { 0%,100% { transform: scaleX(1); } 25%,45% { transform: scaleX(-1); } 55%,85% { transform: scaleX(1) rotate(3deg); } }
+@keyframes pmFHop { 0%,100% { transform: translateY(0) scale(1); } 15% { transform: scale(1.1,.88); } 45% { transform: translateY(-20%) scale(.94,1.08); } 75% { transform: translateY(0) scale(1.08,.92); } }
+@keyframes pmFShake { 0%,100% { transform: rotate(0); } 10%,30%,50%,70% { transform: rotate(-7deg); } 20%,40%,60%,80% { transform: rotate(7deg); } }
+@keyframes pmFFlip { 0% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-25%) rotate(-180deg); } 70% { transform: translateY(-10%) rotate(-360deg); } 100% { transform: translateY(0) rotate(-360deg); } }
+@keyframes pmFOwl { 0%,100% { transform: rotate(0); } 25%,45% { transform: rotate(-20deg); } 60%,80% { transform: rotate(18deg); } }
+@keyframes pmFRoll { 0%,100% { transform: rotate(0) translateX(0); } 40% { transform: rotate(-14deg) translateX(-6%); } 70% { transform: rotate(8deg) translateX(4%); } }
+
+/* --- particle FX --- */
+.fx-z { animation: fxZ 2.7s ease-out infinite; opacity: 0; font-family: 'Unbounded', sans-serif; }
+@keyframes fxZ { 0% { transform: translate(0,0) scale(.5); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(40%, -160%) scale(1.2) rotate(15deg); opacity: 0; } }
+.fx-crumb { animation: fxCrumb 1.3s ease-out infinite; opacity: 0; }
+@keyframes fxCrumb { 0% { transform: translate(0,0) scale(.4); opacity: 0; } 20% { opacity: 1; } 100% { transform: translate(var(--dx, 30%), -120%) scale(1) rotate(90deg); opacity: 0; } }
+.fx-burst { animation: fxBurst 1.25s ease-out infinite; opacity: 0; }
+@keyframes fxBurst { 0% { transform: scale(0) rotate(0); opacity: 0; } 30% { transform: scale(1.3) rotate(40deg); opacity: 1; } 100% { transform: translateY(-80%) scale(.6) rotate(140deg); opacity: 0; } }
+.fx-idea { animation: fxIdea 2.4s ease-in-out infinite; opacity: 0; }
+@keyframes fxIdea { 0% { transform: translateY(20%) scale(.6); opacity: 0; } 25%,70% { transform: translateY(0) scale(1); opacity: 1; } 100% { transform: translateY(-60%) scale(.8); opacity: 0; } }
+.fx-heart { animation: fxHeart 1.6s ease-out infinite; opacity: 0; }
+@keyframes fxHeart { 0% { transform: translateY(20%) scale(.4); opacity: 0; } 25% { transform: scale(1.2); opacity: 1; } 100% { transform: translateY(-140%) scale(.9); opacity: 0; } }
+.fx-drop { animation: fxDrop 2.2s ease-in infinite; opacity: 0; }
+@keyframes fxDrop { 0%,20% { transform: translateY(0) scale(.6); opacity: 0; } 35% { opacity: 1; transform: scale(1); } 100% { transform: translateY(120%) scale(.8); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-layer, .pm-shadow, .fx-z, .fx-crumb, .fx-burst, .fx-idea, .fx-heart, .fx-drop { animation: none !important; }
+}
