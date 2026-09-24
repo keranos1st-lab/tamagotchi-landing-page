@@ -283,11 +283,11 @@ export function FloatingPet() {
 
       {!pipWin && visible && <WalkingPet canPip={canPip} onOpenPip={openPip} onHide={() => setVisible(false)} />}
 
-      <div className="fixed right-4 top-20 z-[61] flex flex-col gap-2">
+      <div className="fixed bottom-4 right-4 z-[61] flex flex-col items-end gap-2">
         {!pipWin && !visible && (
           <button
             onClick={() => setVisible(true)}
-            className="flex items-center gap-2 rounded-xl bg-purple-600 px-3 py-2 text-xs font-semibold text-white shadow-lg hover:bg-purple-500"
+            className="btn-neon !px-3.5 !py-2.5 !text-xs"
           >
             <Icon name="PawPrint" size={14} /> Выпустить питомца
           </button>
@@ -295,7 +295,7 @@ export function FloatingPet() {
         {!pipWin && canPip && (
           <button
             onClick={openPip}
-            className="flex items-center gap-2 rounded-xl bg-slate-800/90 border border-purple-500/30 px-3 py-2 text-xs font-semibold text-purple-100 shadow-lg hover:bg-slate-700"
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#12102b]/80 px-3.5 py-2.5 text-xs font-bold text-white/80 shadow-xl backdrop-blur-xl transition hover:bg-[#1c1940] hover:text-white"
           >
             <Icon name="PictureInPicture2" size={14} /> Поверх всех окон
           </button>
@@ -303,7 +303,7 @@ export function FloatingPet() {
         {pipWin && (
           <button
             onClick={closePip}
-            className="flex items-center gap-2 rounded-xl bg-slate-800/90 border border-purple-500/30 px-3 py-2 text-xs font-semibold text-purple-100 shadow-lg hover:bg-slate-700"
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#12102b]/80 px-3.5 py-2.5 text-xs font-bold text-white/80 shadow-xl backdrop-blur-xl transition hover:bg-[#1c1940] hover:text-white"
           >
             <Icon name="Undo2" size={14} /> Вернуть питомца на сайт
           </button>

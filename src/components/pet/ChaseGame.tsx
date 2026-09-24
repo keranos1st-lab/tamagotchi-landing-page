@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { usePetStore } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
 import type { PetAnim } from './sprites';
+import Icon from '@/components/ui/icon';
+import { GameResult } from './ui';
 
 const DURATION = 30;
 const PET = 70;
@@ -126,38 +128,30 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
     const verdict =
       catches === 0 ? 'Ты неуловим! Питомец не смог тебя поймать' : catches < 5 ? 'Хорошо бегаешь!' : 'Питомец — настоящий охотник!';
     return (
-      <div className="text-center py-6">
-        <div className="flex justify-center mb-2">
-          <PetSprite type={type} anim={catches > 0 ? 'play' : 'failed'} size={96} />
-        </div>
-        <p className="text-white text-lg font-bold mb-1">Поймал тебя {catches} раз</p>
-        <p className="text-purple-300 text-sm mb-1">{verdict}</p>
-        <p className="text-green-400 text-sm mb-4">+{reward} опыта питомцу!</p>
-        <div className="flex gap-2 justify-center">
-          <button
-            onClick={start}
-            className="bg-slate-700 text-white px-5 py-2 rounded-lg hover:bg-slate-600 transition"
-          >
-            Ещё раз
-          </button>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-5 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
-      </div>
+      <GameResult
+        pet={<PetSprite type={type} anim={catches > 0 ? 'play' : 'failed'} size={110} />}
+        title={`Поймал ${catches} раз`}
+        subtitle={verdict}
+        reward={`+${reward} опыта`}
+        onAgain={start}
+        onExit={onComplete}
+      />
     );
   }
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Убегай курсором от питомца!</span>
-        <div className="flex gap-3">
-          <span className="text-pink-400 text-sm font-bold">Поймал: {catches}</span>
-          <span className="text-yellow-400 text-sm font-bold">⏱️ {timeLeft}с</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-white/55">Убегай курсором от питомца!</span>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-pink-300">
+            <Icon name="Hand" size={14} />
+            {catches}
+          </div>
+          <div className={`flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums ${timeLeft <= 5 && phase === 'play' ? 'text-rose-400 animate-pulse' : 'text-amber-300'}`}>
+            <Icon name="Timer" size={14} />
+            {timeLeft}с
+          </div>
         </div>
       </div>
 
@@ -171,7 +165,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
         }}
         onTouchMove={(e) => updateMouse(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={() => (mouse.current = null)}
-        className={`relative h-72 rounded-xl border border-purple-500/20 overflow-hidden touch-none select-none bg-gradient-to-br from-emerald-900/30 via-slate-900/60 to-indigo-900/40 ${
+        className={`pa-field pa-field-grid relative h-80 touch-none select-none ${
           phase === 'play' ? 'cursor-crosshair' : ''
         }`}
       >
@@ -185,7 +179,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
         {flash && (
           <div
             key={flash.id}
-            className="pointer-events-none absolute -translate-x-1/2 -translate-y-full text-sm font-bold text-pink-300 animate-fadeIn"
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-full rounded-full bg-pink-500 px-2.5 py-0.5 text-xs font-extrabold text-white shadow-[0_0_20px_rgba(236,72,153,0.8)] pa-pop"
             style={{ left: flash.x, top: flash.y - 10 }}
           >
             Поймал!
@@ -193,16 +187,14 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
         )}
 
         {phase === 'intro' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/60 text-center p-4">
-            <p className="text-white font-bold mb-1">Догонялки</p>
-            <p className="text-purple-200 text-sm mb-4 max-w-xs">
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#07061a]/70 backdrop-blur-sm text-center p-4">
+            <p className="font-display text-2xl font-bold text-white mb-2">Готов бежать?</p>
+            <p className="text-white/60 text-sm mb-5 max-w-xs">
               Питомец гоняется за курсором 30 секунд. С каждой поимкой он бегает быстрее. Чем больше поймает — тем больше опыта!
             </p>
-            <button
-              onClick={start}
-              className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-            >
-              Старт!
+            <button onClick={start} className="btn-neon pa-shine">
+              <Icon name="Play" size={16} />
+              Старт
             </button>
           </div>
         )}

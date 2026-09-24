@@ -1,5 +1,7 @@
 import { usePetStore, type PetState } from '@/store/petStore';
 import { useState } from 'react';
+import Icon from '@/components/ui/icon';
+import { Chip, Panel, PanelTitle } from './ui';
 
 interface Achievement {
   id: string;
@@ -28,50 +30,59 @@ export function Achievements() {
   const locked = ACHIEVEMENTS.filter(a => !a.check(state));
   const displayed = showAll ? [...unlocked, ...locked] : unlocked.slice(0, 4);
 
+  const pct = Math.round((unlocked.length / ACHIEVEMENTS.length) * 100);
+
   return (
-    <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-4 border border-purple-500/20">
-      <div className="flex justify-between items-center mb-3">
-        <h3 className="text-white font-bold flex items-center gap-2">
-          <span>🏆</span> Достижения
-        </h3>
-        <span className="text-xs text-purple-300 bg-purple-900/50 px-2 py-1 rounded-full">
-          {unlocked.length}/{ACHIEVEMENTS.length}
-        </span>
+    <Panel>
+      <PanelTitle
+        icon="Trophy"
+        title="Достижения"
+        right={<Chip className="!text-amber-200">{unlocked.length}/{ACHIEVEMENTS.length}</Chip>}
+      />
+      <div className="mb-4 h-1.5 rounded-full bg-white/[0.07] overflow-hidden">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-500 shadow-[0_0_10px_rgba(251,191,36,0.6)] transition-all duration-700"
+          style={{ width: `${pct}%` }}
+        />
       </div>
 
       <div className="space-y-2">
-        {displayed.map((achievement) => {
-          const isUnlocked = unlocked.includes(achievement);
+        {displayed.length === 0 && (
+          <div className="glass-soft p-3 text-center text-xs text-white/50">Пока пусто — заботься о питомце, и награды появятся</div>
+        )}
+        {displayed.map((a) => {
+          const ok = unlocked.includes(a);
           return (
             <div
-              key={achievement.id}
-              className={`flex items-center gap-3 p-2 rounded-lg transition ${
-                isUnlocked
-                  ? 'bg-purple-900/30 border border-purple-500/30'
-                  : 'bg-slate-700/30 border border-slate-600/30 opacity-60'
+              key={a.id}
+              className={`flex items-center gap-3 rounded-2xl p-2.5 transition ${
+                ok ? 'bg-gradient-to-r from-amber-400/[0.12] to-transparent border border-amber-300/20' : 'glass-soft opacity-55'
               }`}
             >
-              <span className="text-xl">{isUnlocked ? achievement.icon : '🔒'}</span>
-              <div className="flex-1">
-                <div className={`text-sm font-medium ${isUnlocked ? 'text-white' : 'text-slate-400'}`}>
-                  {achievement.title}
-                </div>
-                <div className="text-xs text-purple-300">{achievement.desc}</div>
+              <div
+                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg ${
+                  ok ? 'bg-gradient-to-br from-amber-300/30 to-orange-500/20 shadow-[0_0_16px_-4px_rgba(251,191,36,0.6)]' : 'bg-white/5 grayscale'
+                }`}
+              >
+                {ok ? a.icon : <Icon name="Lock" size={15} className="text-white/40" />}
               </div>
-              {isUnlocked && <span className="text-green-400 text-xs">✓</span>}
+              <div className="min-w-0 flex-1">
+                <div className={`text-sm font-bold ${ok ? 'text-white' : 'text-white/60'}`}>{a.title}</div>
+                <div className="truncate text-xs text-white/45">{a.desc}</div>
+              </div>
+              {ok && <Icon name="BadgeCheck" size={18} className="text-amber-300 shrink-0" />}
             </div>
           );
         })}
       </div>
 
-      {ACHIEVEMENTS.length > 4 && (
-        <button
-          onClick={() => setShowAll(!showAll)}
-          className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-200 transition"
-        >
-          {showAll ? 'Свернуть' : `Показать все (${ACHIEVEMENTS.length})`}
-        </button>
-      )}
-    </div>
+      <button
+        onClick={() => setShowAll(!showAll)}
+        className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl py-2 text-xs font-bold text-white/50 hover:bg-white/5 hover:text-white transition"
+      >
+        {showAll ? 'Свернуть' : `Все награды (${ACHIEVEMENTS.length})`}
+        <Icon name={showAll ? 'ChevronUp' : 'ChevronDown'} size={14} />
+      </button>
+    </Panel>
   );
 }

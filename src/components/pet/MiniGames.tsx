@@ -3,6 +3,8 @@ import { usePetStore, type PetType } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
 import { PET_ICONS, type PetAnim } from './sprites';
 import { ChaseGame } from './ChaseGame';
+import Icon from '@/components/ui/icon';
+import { GameResult } from './ui';
 
 function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
   const type = usePetStore((s) => s.type);
@@ -11,58 +13,99 @@ function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
 
 type MiniGame = 'none' | 'catch' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction' | 'chase';
 
+const GAMES: { id: MiniGame; icon: string; name: string; desc: string; reward: string; grad: string; glow: string; tag?: string }[] = [
+  { id: 'chase', icon: 'Footprints', name: 'Догонялки', desc: 'Убегай курсором от питомца', reward: 'до +60 XP', grad: 'from-pink-500 to-fuchsia-600', glow: 'rgba(236,72,153,0.55)', tag: 'Новое' },
+  { id: 'catch', icon: 'Drumstick', name: 'Ловля еды', desc: 'Лови вкусное, мимо мусора', reward: 'до +50 XP', grad: 'from-orange-400 to-amber-500', glow: 'rgba(251,146,60,0.55)' },
+  { id: 'memory', icon: 'Layers', name: 'Мемори', desc: 'Найди пары питомцев', reward: 'до +50 XP', grad: 'from-sky-400 to-blue-600', glow: 'rgba(56,189,248,0.55)' },
+  { id: 'quiz', icon: 'Brain', name: 'Викторина', desc: 'Проверь знания', reward: '+IQ', grad: 'from-violet-500 to-purple-700', glow: 'rgba(139,92,246,0.55)' },
+  { id: 'snake', icon: 'Route', name: 'Змейка', desc: 'Питомец собирает хвост', reward: '+XP за яблоко', grad: 'from-emerald-400 to-green-600', glow: 'rgba(52,211,153,0.55)' },
+  { id: 'tictactoe', icon: 'Grid3x3', name: 'Крестики-нолики', desc: 'Обыграй питомца', reward: '+20 XP', grad: 'from-rose-500 to-red-600', glow: 'rgba(244,63,94,0.55)' },
+  { id: 'reaction', icon: 'Zap', name: 'Реакция', desc: 'Кто быстрее?', reward: '+15 XP', grad: 'from-yellow-300 to-orange-500', glow: 'rgba(250,204,21,0.55)' },
+];
+
 export function MiniGames() {
   const [activeGame, setActiveGame] = useState<MiniGame>('none');
   const { energy } = usePetStore();
+  const exit = () => setActiveGame('none');
 
   if (energy < 10) {
     return (
-      <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-4 border border-purple-500/20">
-        <h3 className="text-white font-bold mb-2">🎮 Мини-игры</h3>
-        <p className="text-purple-300 text-sm">Мало энергии для игр. Уложите питомца спать!</p>
+      <div className="glass flex items-center gap-4 p-5">
+        <MyPet anim="sleep" size={90} />
+        <div>
+          <div className="font-display text-lg font-bold text-white">Нет сил играть</div>
+          <p className="mt-1 text-sm text-white/55">Уложи питомца спать — и возвращайтесь к играм.</p>
+        </div>
       </div>
     );
   }
 
-  const games = [
-    { id: 'chase' as MiniGame, icon: '🏃', name: 'Догонялки', desc: 'Убегай от питомца', reward: 'до +60 опыта', color: 'from-pink-500 to-fuchsia-500' },
-    { id: 'catch' as MiniGame, icon: '🍖', name: 'Ловля еды', desc: 'Рефлексы', reward: '+15 IQ', color: 'from-orange-500 to-amber-500' },
-    { id: 'memory' as MiniGame, icon: '🃏', name: 'Мемори', desc: 'Память', reward: '+20 IQ', color: 'from-blue-500 to-cyan-500' },
-    { id: 'quiz' as MiniGame, icon: '🧠', name: 'Викторина', desc: 'Знания', reward: '+25 IQ', color: 'from-purple-500 to-pink-500' },
-    { id: 'snake' as MiniGame, icon: '🐍', name: 'Змейка', desc: 'Питомец собирает хвост', reward: '+30 IQ', color: 'from-green-500 to-emerald-500' },
-    { id: 'tictactoe' as MiniGame, icon: '⭕', name: 'Крестики-нолики', desc: 'Стратегия', reward: '+20 IQ', color: 'from-red-500 to-rose-500' },
-    { id: 'reaction' as MiniGame, icon: '⚡', name: 'Реакция', desc: 'Скорость', reward: '+15 IQ', color: 'from-yellow-500 to-orange-500' },
-  ];
+  if (activeGame !== 'none') {
+    const g = GAMES.find((x) => x.id === activeGame)!;
+    return (
+      <div className="glass p-4 sm:p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <button onClick={exit} className="icon-btn !h-9 !w-9" title="Назад к играм">
+            <Icon name="ArrowLeft" size={16} />
+          </button>
+          <div className={`pa-icon-chip h-9 w-9 bg-gradient-to-br ${g.grad} text-white`} style={{ ['--chip-glow' as string]: g.glow }}>
+            <Icon name={g.icon} size={17} />
+          </div>
+          <div className="font-display text-base font-bold text-white">{g.name}</div>
+        </div>
+        {activeGame === 'catch' && <CatchGame onComplete={exit} />}
+        {activeGame === 'memory' && <MemoryGame onComplete={exit} />}
+        {activeGame === 'quiz' && <QuizGame onComplete={exit} />}
+        {activeGame === 'snake' && <SnakeGame onComplete={exit} />}
+        {activeGame === 'tictactoe' && <TicTacToeGame onComplete={exit} />}
+        {activeGame === 'reaction' && <ReactionGame onComplete={exit} />}
+        {activeGame === 'chase' && <ChaseGame onComplete={exit} />}
+      </div>
+    );
+  }
+
+  const [hero, ...rest] = GAMES;
 
   return (
-    <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-4 border border-purple-500/20">
-      <h3 className="text-white font-bold mb-3">🎮 Мини-игры</h3>
-      
-      {activeGame === 'none' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {games.map((game) => (
-            <button
-              key={game.id}
-              onClick={() => setActiveGame(game.id)}
-              className="group relative p-4 bg-slate-700/50 rounded-xl border border-purple-500/20 hover:border-purple-400 transition-all hover:scale-105 overflow-hidden"
-            >
-              <div className={`absolute inset-0 bg-gradient-to-br ${game.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
-              <div className="text-3xl mb-2">{game.icon}</div>
-              <div className="text-white text-sm font-bold">{game.name}</div>
-              <div className="text-purple-300 text-xs mt-1">{game.desc}</div>
-              <div className="text-green-400 text-xs mt-1 font-medium">{game.reward}</div>
-            </button>
-          ))}
+    <div className="space-y-3">
+      <button
+        onClick={() => setActiveGame(hero.id)}
+        className="pa-tile group flex w-full items-center gap-4 overflow-hidden p-4 text-left sm:p-5"
+      >
+        <div className={`absolute inset-0 bg-gradient-to-r ${hero.grad} opacity-25 transition-opacity group-hover:opacity-40`} />
+        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-pink-400/30 blur-3xl" />
+        <div className="relative shrink-0">
+          <MyPet anim="run-right" size={96} />
         </div>
-      )}
+        <div className="relative flex-1">
+          <span className="inline-block rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-pink-600">
+            {hero.tag}
+          </span>
+          <div className="mt-1.5 font-display text-xl font-bold text-white">{hero.name}</div>
+          <div className="text-sm text-white/70">{hero.desc}</div>
+        </div>
+        <div className="relative hidden sm:flex btn-neon !py-2.5">
+          Играть
+          <Icon name="Play" size={15} />
+        </div>
+      </button>
 
-      {activeGame === 'catch' && <CatchGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'memory' && <MemoryGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'quiz' && <QuizGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'snake' && <SnakeGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'tictactoe' && <TicTacToeGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'reaction' && <ReactionGame onComplete={() => setActiveGame('none')} />}
-      {activeGame === 'chase' && <ChaseGame onComplete={() => setActiveGame('none')} />}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {rest.map((g) => (
+          <button key={g.id} onClick={() => setActiveGame(g.id)} className="pa-tile group p-4 text-left">
+            <div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br ${g.grad} opacity-20 blur-2xl transition-opacity group-hover:opacity-45`} />
+            <div className={`pa-icon-chip relative h-11 w-11 bg-gradient-to-br ${g.grad} text-white`} style={{ ['--chip-glow' as string]: g.glow }}>
+              <Icon name={g.icon} size={20} />
+            </div>
+            <div className="relative mt-3 font-extrabold text-white">{g.name}</div>
+            <div className="relative mt-0.5 text-xs text-white/50">{g.desc}</div>
+            <div className="relative mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold text-emerald-300">
+              <Icon name="Sparkles" size={11} />
+              {g.reward}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -153,21 +196,18 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Лови еду, избегай мусора!</span>
-        <div className="flex gap-3">
-          <span className="text-green-400 text-sm font-bold">Очки: {score}</span>
-          <span className="text-yellow-400 text-sm font-bold">⏱️ {timeLeft}с</span>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-white/55">Лови еду, избегай мусора!</span>
+        <div className="flex gap-2"><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-emerald-300"><Icon name="Star" size={14} />{score}</div><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-amber-300"><Icon name="Timer" size={14} />{timeLeft}с</div></div>
       </div>
 
       {!gameOver ? (
-        <div className="relative h-64 bg-gradient-to-b from-sky-900/30 to-slate-900/50 rounded-xl border border-purple-500/20 overflow-hidden">
+        <div className="pa-field relative h-72">
           {items.map(item => (
             <button
               key={item.id}
               onClick={() => catchItem(item.id, item.type)}
-              className="absolute text-2xl transition-all hover:scale-125 cursor-pointer"
+              className="absolute text-3xl transition-transform hover:scale-125 cursor-pointer drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"
               style={{ left: `${item.x}%`, top: `${item.y}%` }}
             >
               {item.emoji}
@@ -178,17 +218,13 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
           </div>
         </div>
       ) : (
-        <div className="text-center py-8">
-          <div className="flex justify-center mb-2"><MyPet anim="play" /></div>
-          <p className="text-white text-lg font-bold mb-2">Результат: {score} очков</p>
-          <p className="text-purple-300 text-sm mb-4">+{Math.floor(score / 2)} опыта питомцу!</p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
+        <GameResult
+          pet={<MyPet anim="play" size={110} />}
+          title={`${score} очков`}
+          subtitle={score >= 150 ? 'Вот это реакция!' : 'Неплохо! Попробуй побить рекорд'}
+          reward={`+${Math.floor(score / 2)} опыта`}
+          onExit={onComplete}
+        />
       )}
     </div>
   );
@@ -252,43 +288,39 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Найди все пары!</span>
-        <span className="text-purple-300 text-xs">Ходов: {moves}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-white/55">Найди все пары!</span>
+        <div className="flex gap-2"><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-sky-300"><Icon name="MousePointerClick" size={14} />{moves}</div></div>
       </div>
 
       {!gameWon ? (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3 max-w-md mx-auto [perspective:800px]">
           {cards.map((card, i) => (
             <button
               key={i}
               onClick={() => handleCardClick(i)}
-              className={`aspect-square rounded-xl text-2xl flex items-center justify-center transition-all ${
+              className={`aspect-square rounded-2xl flex items-center justify-center border transition-all duration-300 ${
                 card.flipped || card.matched
-                  ? 'bg-purple-600 scale-105'
-                  : 'bg-slate-700 hover:bg-slate-600 hover:scale-105'
-              } ${card.matched ? 'opacity-50' : ''}`}
+                  ? 'bg-gradient-to-br from-sky-400/30 to-violet-500/30 border-sky-300/40 [transform:rotateY(0deg)]'
+                  : 'bg-gradient-to-br from-white/[0.08] to-white/[0.02] border-white/10 hover:border-white/25 hover:-translate-y-0.5'
+              } ${card.matched ? 'ring-2 ring-emerald-300/60 !bg-emerald-400/15' : ''}`}
             >
               {card.flipped || card.matched ? (
                 <img src={PET_ICONS[card.emoji as PetType]} alt="" className="w-4/5 h-4/5 object-contain" draggable={false} />
               ) : (
-                <span className="text-purple-300">?</span>
+                <Icon name="Sparkle" size={18} className="text-white/25" />
               )}
             </button>
           ))}
         </div>
       ) : (
-        <div className="text-center py-8">
-          <div className="flex justify-center mb-2"><MyPet anim="play" /></div>
-          <p className="text-white text-lg font-bold mb-2">Победа за {moves} ходов!</p>
-          <p className="text-purple-300 text-sm mb-4">+{Math.max(10, 50 - moves * 2)} опыта!</p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
+        <GameResult
+          pet={<MyPet anim="play" size={110} />}
+          title="Все пары найдены!"
+          subtitle={`За ${moves} ходов`}
+          reward={`+${Math.max(10, 50 - moves * 2)} опыта`}
+          onExit={onComplete}
+        />
       )}
     </div>
   );
@@ -339,47 +371,50 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
     <div className="space-y-4">
       {!gameOver ? (
         <>
-          <div className="flex justify-between items-center">
-            <span className="text-purple-200 text-sm">Вопрос {currentQ + 1}/{questions.length}</span>
-            <span className="text-green-400 text-sm font-bold">Очки: {score}</span>
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-pink-400 transition-all duration-500" style={{ width: `${((currentQ + 1) / questions.length) * 100}%` }} />
+            </div>
+            <span className="text-xs font-bold text-white/50 tabular-nums">{currentQ + 1}/{questions.length}</span>
+            <div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold text-emerald-300"><Icon name="Check" size={14} />{score}</div>
           </div>
 
-          <div className="bg-slate-700/50 rounded-xl p-4 border border-purple-500/20">
-            <p className="text-white text-lg font-medium mb-4">{questions[currentQ].q}</p>
+          <div className="pa-field p-5 flex gap-4 items-start">
+            <div className="hidden sm:block shrink-0 -mb-5 -ml-2 self-end"><MyPet anim={selected === null ? 'study' : selected === questions[currentQ].correct ? 'play' : 'failed'} size={100} /></div>
+            <div className="flex-1">
+            <p className="font-display text-lg font-bold text-white mb-4 leading-snug">{questions[currentQ].q}</p>
             <div className="grid grid-cols-1 gap-2">
               {questions[currentQ].a.map((answer, i) => (
                 <button
                   key={i}
                   onClick={() => handleAnswer(i)}
                   disabled={selected !== null}
-                  className={`p-3 rounded-lg text-left transition-all ${
+                  className={`flex items-center gap-3 p-3 rounded-2xl text-left font-semibold border transition-all ${
                     selected === null
-                      ? 'bg-slate-600 hover:bg-purple-600 text-white'
+                      ? 'bg-white/[0.05] border-white/10 text-white hover:border-violet-300/50 hover:bg-violet-500/15'
                       : i === questions[currentQ].correct
-                      ? 'bg-green-600 text-white'
+                      ? 'bg-emerald-500/20 border-emerald-300/50 text-emerald-100'
                       : selected === i
-                      ? 'bg-red-600 text-white'
-                      : 'bg-slate-600 text-white opacity-50'
+                      ? 'bg-rose-500/20 border-rose-300/50 text-rose-100'
+                      : 'bg-white/[0.03] border-white/5 text-white/40'
                   }`}
                 >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/10 text-xs font-extrabold">{'ABCD'[i]}</span>
                   {answer}
                 </button>
               ))}
             </div>
+            </div>
           </div>
         </>
       ) : (
-        <div className="text-center py-8">
-          <div className="flex justify-center mb-2"><MyPet anim="study" /></div>
-          <p className="text-white text-lg font-bold mb-2">Результат: {score}/{questions.length}</p>
-          <p className="text-purple-300 text-sm mb-4">+{score * 5} опыта!</p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
+        <GameResult
+          pet={<MyPet anim="study" size={110} />}
+          title={`${score} из ${questions.length}`}
+          subtitle={score === questions.length ? 'Идеально! Настоящий гений' : 'Питомец стал немного умнее'}
+          reward={`+${score * 5} опыта`}
+          onExit={onComplete}
+        />
       )}
     </div>
   );
@@ -470,24 +505,20 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Управляй стрелками!</span>
-        <span className="text-green-400 text-sm font-bold">Очки: {score}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-white/55">Управляй стрелками на клавиатуре</span>
+        <div className="flex gap-2"><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-emerald-300"><Icon name="Apple" size={14} />{score}</div></div>
       </div>
 
       {!gameOver ? (
         <>
           <div
             ref={gameRef}
-            className="relative w-full aspect-square bg-slate-900 rounded-xl border border-purple-500/20 overflow-hidden"
-            style={{ maxWidth: '300px', margin: '0 auto' }}
+            className="pa-field pa-field-grid relative w-full aspect-square"
+            style={{ maxWidth: '340px', margin: '0 auto' }}
           >
             {/* Grid */}
-            <div className="absolute inset-0 grid grid-cols-20 grid-rows-20">
-              {Array.from({ length: 400 }).map((_, i) => (
-                <div key={i} className="border border-slate-800/30" />
-              ))}
-            </div>
+
 
             {/* Snake */}
             {snake.map((segment, i) =>
@@ -502,7 +533,7 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
               ) : (
                 <div
                   key={i}
-                  className="absolute w-[5%] h-[5%] rounded-full bg-purple-400/80 scale-75"
+                  className="absolute w-[5%] h-[5%] rounded-full bg-gradient-to-br from-violet-300 to-pink-400 scale-75 shadow-[0_0_8px_rgba(236,72,153,0.7)]"
                   style={{ left: `${segment.x * 5}%`, top: `${segment.y * 5}%` }}
                 />
               ),
@@ -510,33 +541,31 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
 
             {/* Food */}
             <div
-              className="absolute w-[5%] h-[5%] bg-red-500 rounded-full"
+              className="absolute w-[5%] h-[5%] grid place-items-center text-[14px] leading-none animate-bounce-gentle"
               style={{ left: `${food.x * 5}%`, top: `${food.y * 5}%` }}
-            />
+            >
+              🍎
+            </div>
           </div>
 
           {/* Mobile controls */}
           <div className="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
             <div />
-            <button onClick={() => handleTouch('UP')} className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg">↑</button>
+            <button onClick={() => handleTouch('UP')} className="icon-btn !w-full !h-12"><Icon name="ChevronUp" size={22} /></button>
             <div />
-            <button onClick={() => handleTouch('LEFT')} className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg">←</button>
-            <button onClick={() => handleTouch('DOWN')} className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg">↓</button>
-            <button onClick={() => handleTouch('RIGHT')} className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg">→</button>
+            <button onClick={() => handleTouch('LEFT')} className="icon-btn !w-full !h-12"><Icon name="ChevronLeft" size={22} /></button>
+            <button onClick={() => handleTouch('DOWN')} className="icon-btn !w-full !h-12"><Icon name="ChevronDown" size={22} /></button>
+            <button onClick={() => handleTouch('RIGHT')} className="icon-btn !w-full !h-12"><Icon name="ChevronRight" size={22} /></button>
           </div>
         </>
       ) : (
-        <div className="text-center py-8">
-          <div className="flex justify-center mb-2"><MyPet anim="failed" /></div>
-          <p className="text-white text-lg font-bold mb-2">Длина змейки: {snake.length}</p>
-          <p className="text-purple-300 text-sm mb-4">+{Math.floor(score / 2)} опыта!</p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
+        <GameResult
+          pet={<MyPet anim="failed" size={110} />}
+          title={`Длина хвоста: ${snake.length}`}
+          subtitle="Питомец врезался — но было весело!"
+          reward={`+${Math.floor(score / 2)} опыта`}
+          onExit={onComplete}
+        />
       )}
     </div>
   );
@@ -633,11 +662,18 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Вы: ✕ | Питомец</span>
-        <span className="text-purple-300 text-xs">
-          {winner ? (winner === 'X' ? '🎉 Победа!' : winner === 'O' ? '😢 Поражение' : '🤝 Ничья') : isPlayerTurn ? 'Ваш ход' : 'Ход питомца...'}
+      <div className="flex items-center justify-center gap-3">
+        <div className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition ${isPlayerTurn && !winner ? 'border-sky-300/50 bg-sky-400/15' : 'border-white/10 bg-white/[0.04]'}`}>
+          <Icon name="X" size={16} className="text-sky-300" strokeWidth={3} />
+          <span className="text-sm font-bold text-white">Вы</span>
+        </div>
+        <span className="font-display text-sm font-bold text-white/70">
+          {winner ? (winner === 'X' ? 'Победа!' : winner === 'O' ? 'Поражение' : 'Ничья') : 'VS'}
         </span>
+        <div className={`flex items-center gap-2 rounded-2xl border px-3 py-2 transition ${!isPlayerTurn && !winner ? 'border-pink-300/50 bg-pink-400/15' : 'border-white/10 bg-white/[0.04]'}`}>
+          <span className="h-5 w-5"><TttPet /></span>
+          <span className="text-sm font-bold text-white">Питомец</span>
+        </div>
       </div>
 
       <div className="flex justify-center">
@@ -647,18 +683,18 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-2 max-w-[250px] mx-auto">
+      <div className="grid grid-cols-3 gap-2.5 max-w-[280px] mx-auto">
         {board.map((cell, i) => (
           <button
             key={i}
             onClick={() => handleClick(i)}
-            className="aspect-square bg-slate-700 hover:bg-slate-600 rounded-xl text-4xl font-bold transition-all disabled:cursor-not-allowed"
+            className="aspect-square grid place-items-center rounded-2xl border border-white/10 bg-white/[0.05] hover:enabled:bg-white/10 hover:enabled:border-white/25 transition-all disabled:cursor-not-allowed"
             disabled={!!cell || !!winner || !isPlayerTurn}
           >
             {cell === 'O' ? (
               <TttPet />
             ) : (
-              <span className="text-blue-400">{cell}</span>
+              cell && <Icon name="X" size={40} strokeWidth={3} className="text-sky-300 drop-shadow-[0_0_10px_rgba(56,189,248,0.7)] pa-pop" />
             )}
           </button>
         ))}
@@ -666,14 +702,11 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
 
       {winner && (
         <div className="text-center">
-          <p className="text-purple-300 text-sm mb-3">
-            {winner === 'X' ? '+20 опыта!' : winner === 'draw' ? '+10 опыта!' : 'Попробуй ещё раз!'}
+          <p className="text-emerald-300 text-sm font-bold mb-3">
+            {winner === 'X' ? '+20 опыта' : winner === 'draw' ? '+10 опыта' : 'Питомец победил — реванш?'}
           </p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
+          <button onClick={onComplete} className="btn-neon">
+            Готово
           </button>
         </div>
       )}
@@ -745,35 +778,31 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-between items-center">
-        <span className="text-purple-200 text-sm">Нажми когда станет зелёным!</span>
-        <span className="text-purple-300 text-xs">Попытка: {attempts + 1}/5</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm text-white/55">Жми, когда станет зелёным!</span>
+        <div className="flex gap-2"><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-amber-300"><Icon name="Target" size={14} />{Math.min(attempts + 1, 5)}/5</div></div>
       </div>
 
       {gameState === 'done' ? (
-        <div className="text-center py-8">
-          <div className="flex justify-center mb-2"><MyPet anim="wave" /></div>
-          <p className="text-white text-lg font-bold mb-2">Лучшее время: {bestTime}мс</p>
-          <p className="text-purple-300 text-sm mb-4">+{Math.max(10, Math.floor(1000 / (bestTime || 1)))} опыта!</p>
-          <button
-            onClick={onComplete}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-6 py-2 rounded-lg hover:from-purple-500 hover:to-pink-500 transition"
-          >
-            Завершить
-          </button>
-        </div>
+        <GameResult
+          pet={<MyPet anim="wave" size={110} />}
+          title={`${bestTime} мс`}
+          subtitle={bestTime && bestTime < 300 ? 'Молниеносно!' : 'Лучшее время реакции'}
+          reward={`+${Math.max(10, Math.floor(1000 / (bestTime || 1)))} опыта`}
+          onExit={onComplete}
+        />
       ) : (
         <>
           <button
             onClick={handleClick}
-            className={`w-full h-48 rounded-xl text-white text-xl font-bold transition-all ${
+            className={`relative w-full h-56 rounded-3xl border font-display text-2xl font-bold text-white transition-all duration-200 overflow-hidden ${
               gameState === 'waiting'
-                ? 'bg-blue-600 hover:bg-blue-500'
+                ? 'bg-gradient-to-br from-violet-600/70 to-indigo-700/70 border-violet-300/30 hover:brightness-110'
                 : gameState === 'ready'
-                ? 'bg-red-600'
+                ? 'bg-gradient-to-br from-rose-600/80 to-red-700/80 border-rose-300/40'
                 : gameState === 'go'
-                ? 'bg-green-600 animate-pulse'
-                : 'bg-slate-700'
+                ? 'bg-gradient-to-br from-emerald-400 to-green-600 border-emerald-200/60 shadow-[0_0_60px_rgba(52,211,153,0.6)] scale-[1.01]'
+                : 'bg-white/[0.06] border-white/10'
             }`}
           >
             {gameState === 'waiting' && 'Нажми чтобы начать'}
@@ -782,7 +811,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
             {gameState === 'clicked' && `${reactionTime}мс`}
           </button>
           {bestTime && (
-            <p className="text-center text-purple-300 text-sm mt-2">Лучшее: {bestTime}мс</p>
+            <p className="text-center text-white/50 text-sm mt-3">Лучшее: <span className="font-bold text-amber-300">{bestTime} мс</span></p>
           )}
         </>
       )}

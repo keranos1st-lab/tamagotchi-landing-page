@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePetStore } from '@/store/petStore';
 import { generatePetResponse } from '@/utils/aiAgent';
+import Icon from '@/components/ui/icon';
+import { PET_ICONS } from './sprites';
+import { Chip } from './ui';
 
 export function PetChat() {
   const { chatHistory, addChatMessage, name, type, intelligence, level } = usePetStore();
@@ -68,69 +71,68 @@ export function PetChat() {
   }, []);
 
   return (
-    <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl border border-purple-500/20 flex flex-col h-[400px]">
-      {/* Chat header */}
-      <div className="px-4 py-3 border-b border-purple-500/20 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-          <span className="text-white font-medium text-sm">AI-Агент {name}</span>
+    <div className="glass flex h-[460px] flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet-500/40 to-pink-500/30 border border-white/10">
+              <img src={PET_ICONS[type]} alt="" className="h-8 w-8 object-contain" />
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-[#12102b]" />
+          </div>
+          <div>
+            <div className="text-sm font-extrabold text-white">{name}</div>
+            <div className="text-xs text-emerald-300/80">{isTyping ? 'печатает…' : 'в сети · AI-агент'}</div>
+          </div>
         </div>
-        <span className="text-xs text-purple-300 bg-purple-900/50 px-2 py-1 rounded-full">
-          IQ: {intelligence}
-        </span>
+        <Chip className="!text-cyan-200">
+          <Icon name="Brain" size={12} />
+          IQ {Math.round(intelligence)}
+        </Chip>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {chatHistory.length === 0 && (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-3">💬</div>
-            <p className="text-purple-200 text-sm">
-              Напиши {name} что-нибудь!
-            </p>
-            <p className="text-purple-400 text-xs mt-1">
-              Чем выше интеллект — тем лучше советы
-            </p>
+          <div className="flex h-full flex-col items-center justify-center text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-500/30 to-pink-500/20 border border-white/10">
+              <Icon name="Sparkles" size={24} className="text-pink-200" />
+            </div>
+            <p className="mt-3 font-bold text-white">Напиши {name} что-нибудь</p>
+            <p className="mt-1 text-xs text-white/45">Чем выше интеллект — тем умнее ответы</p>
           </div>
         )}
 
         {chatHistory.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+          <div key={i} className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} pa-rise`}>
+            {msg.role === 'pet' && (
+              <img src={PET_ICONS[type]} alt="" className="mb-1 h-7 w-7 shrink-0 rounded-lg bg-white/5 object-contain p-0.5" />
+            )}
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
+              className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === 'user'
-                  ? 'bg-purple-600 text-white rounded-br-sm'
-                  : 'bg-slate-700 text-purple-100 rounded-bl-sm border border-purple-500/20'
+                  ? 'rounded-br-md bg-gradient-to-br from-violet-500 to-pink-500 text-white shadow-[0_8px_20px_-8px_rgba(236,72,153,0.6)]'
+                  : 'rounded-bl-md border border-white/[0.08] bg-white/[0.06] text-white/90'
               }`}
             >
-              {msg.role === 'pet' && (
-                <div className="text-xs text-purple-400 mb-1 font-medium">{name}</div>
-              )}
-              <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
+              {msg.text}
             </div>
           </div>
         ))}
 
         {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-slate-700 rounded-2xl rounded-bl-sm px-4 py-3 border border-purple-500/20">
-              <div className="flex gap-1">
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
+          <div className="flex items-end gap-2">
+            <img src={PET_ICONS[type]} alt="" className="mb-1 h-7 w-7 shrink-0 rounded-lg bg-white/5 object-contain p-0.5" />
+            <div className="flex gap-1 rounded-2xl rounded-bl-md border border-white/[0.08] bg-white/[0.06] px-4 py-3.5">
+              {[0, 150, 300].map((d) => (
+                <span key={d} className="h-2 w-2 animate-bounce rounded-full bg-pink-300" style={{ animationDelay: `${d}ms` }} />
+              ))}
             </div>
           </div>
         )}
-
         <div ref={chatEndRef} />
       </div>
 
-      {/* Quick questions & selection button */}
-      <div className="px-4 py-2 border-t border-purple-500/10 flex gap-2 overflow-x-auto items-center">
+      <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 pt-1">
         {quickQuestions.map((q) => (
           <button
             key={q}
@@ -138,38 +140,39 @@ export function PetChat() {
               setInput(q);
               inputRef.current?.focus();
             }}
-            className="text-xs bg-purple-900/50 text-purple-300 px-3 py-1 rounded-full border border-purple-500/20 hover:bg-purple-800/50 hover:text-white transition whitespace-nowrap"
+            className="whitespace-nowrap rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs font-semibold text-white/70 transition hover:border-pink-300/40 hover:text-white"
           >
             {q}
           </button>
         ))}
         <button
           onClick={handleSendSelection}
-          className="text-xs bg-indigo-900/50 text-indigo-300 px-3 py-1 rounded-full border border-indigo-500/20 hover:bg-indigo-800/50 hover:text-white transition whitespace-nowrap flex items-center gap-1"
           title="Выделите текст на странице и нажмите, чтобы отправить питомцу"
+          className="flex items-center gap-1 whitespace-nowrap rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
         >
-          📋 Выделенное
+          <Icon name="TextSelect" size={12} />
+          Выделенное
         </button>
       </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-purple-500/20">
-        <div className="flex gap-2">
+      <div className="p-3 pt-1">
+        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 focus-within:border-pink-300/40 transition">
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
-            placeholder="Спроси у питомца..."
-            className="flex-1 bg-slate-700 border border-purple-500/30 rounded-xl px-4 py-2.5 text-white text-sm placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20 transition"
+            placeholder="Спроси у питомца…"
+            className="flex-1 bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/35 focus:outline-none"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || isTyping}
-            className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-4 py-2.5 rounded-xl font-medium text-sm hover:from-purple-500 hover:to-pink-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="btn-neon !h-10 !w-10 !p-0 !rounded-xl"
+            title="Отправить"
           >
-            ➤
+            <Icon name="ArrowUp" size={18} />
           </button>
         </div>
       </div>

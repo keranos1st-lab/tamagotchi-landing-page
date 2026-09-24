@@ -1,4 +1,5 @@
 import { usePetStore } from '@/store/petStore';
+import Icon from '@/components/ui/icon';
 
 type ActionType = 'feed' | 'play' | 'train' | 'sleep' | 'heal' | null;
 
@@ -10,115 +11,52 @@ export function PetActions({ onAction }: PetActionsProps) {
   const { feed, play, train, sleep, heal, energy, hunger } = usePetStore();
 
   const actions = [
-    {
-      id: 'feed' as const,
-      label: 'Покормить',
-      icon: '🍖',
-      desc: 'Сытость +25, Счастье +5',
-      cost: 'Энергия -5',
-      disabled: energy < 5,
-      color: 'from-orange-500 to-amber-500',
-      onClick: () => {
-        feed();
-        onAction('feed');
-      },
-    },
-    {
-      id: 'play' as const,
-      label: 'Играть',
-      icon: '🎾',
-      desc: 'Счастье +30',
-      cost: 'Энергия -20, Голод -10',
-      disabled: energy < 15,
-      color: 'from-pink-500 to-rose-500',
-      onClick: () => {
-        play();
-        onAction('play');
-      },
-    },
-    {
-      id: 'train' as const,
-      label: 'Обучать',
-      icon: '📚',
-      desc: 'Интеллект +5',
-      cost: 'Энергия -25, Голод -15',
-      disabled: energy < 20,
-      color: 'from-purple-500 to-violet-500',
-      onClick: () => {
-        train();
-        onAction('train');
-      },
-    },
-    {
-      id: 'sleep' as const,
-      label: 'Спать',
-      icon: '💤',
-      desc: 'Энергия +50, Здоровье +10',
-      cost: 'Голод -10',
-      disabled: false,
-      color: 'from-blue-500 to-indigo-500',
-      onClick: () => {
-        sleep();
-        onAction('sleep');
-      },
-    },
-    {
-      id: 'heal' as const,
-      label: 'Лечить',
-      icon: '💊',
-      desc: 'Здоровье +30',
-      cost: 'Бесплатно',
-      disabled: false,
-      color: 'from-green-500 to-emerald-500',
-      onClick: () => {
-        heal();
-        onAction('heal');
-      },
-    },
+    { id: 'feed' as const, label: 'Покормить', icon: 'Drumstick', gain: '+25 сытость', cost: '−5 энергии', disabled: energy < 5, grad: 'from-orange-400 to-amber-500', glow: 'rgba(251,146,60,0.55)', fn: feed },
+    { id: 'play' as const, label: 'Играть', icon: 'Gamepad2', gain: '+30 счастье', cost: '−20 энергии', disabled: energy < 15, grad: 'from-pink-500 to-rose-500', glow: 'rgba(236,72,153,0.55)', fn: play },
+    { id: 'train' as const, label: 'Обучать', icon: 'GraduationCap', gain: '+5 IQ', cost: '−25 энергии', disabled: energy < 20, grad: 'from-violet-500 to-indigo-500', glow: 'rgba(139,92,246,0.55)', fn: train },
+    { id: 'sleep' as const, label: 'Спать', icon: 'Moon', gain: '+50 энергии', cost: '−10 сытости', disabled: false, grad: 'from-sky-500 to-blue-600', glow: 'rgba(56,189,248,0.55)', fn: sleep },
+    { id: 'heal' as const, label: 'Лечить', icon: 'Pill', gain: '+30 здоровье', cost: 'Бесплатно', disabled: false, grad: 'from-emerald-400 to-teal-500', glow: 'rgba(52,211,153,0.55)', fn: heal },
   ];
 
   return (
-    <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-4 border border-purple-500/20">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {actions.map((action) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {actions.map((a) => (
           <button
-            key={action.id}
-            onClick={action.onClick}
-            disabled={action.disabled}
-            className={`relative group p-3 rounded-xl border transition-all duration-200 ${
-              action.disabled
-                ? 'bg-slate-700/50 border-slate-600 opacity-50 cursor-not-allowed'
-                : 'bg-slate-700/50 border-purple-500/30 hover:border-purple-400 hover:bg-slate-700 hover:scale-105 active:scale-95'
-            }`}
+            key={a.id}
+            disabled={a.disabled}
+            onClick={() => {
+              a.fn();
+              onAction(a.id);
+            }}
+            className="pa-tile group p-4 text-left"
           >
-            <div className="text-2xl mb-1">{action.icon}</div>
-            <div className="text-white text-sm font-medium">{action.label}</div>
-            <div className="text-purple-300 text-xs mt-0.5">{action.desc}</div>
-            <div className="text-slate-400 text-xs mt-0.5">{action.cost}</div>
-
-            {/* Hover gradient */}
-            {!action.disabled && (
-              <div className={`absolute inset-0 rounded-xl bg-gradient-to-r ${action.color} opacity-0 group-hover:opacity-10 transition-opacity`} />
-            )}
+            <div
+              className={`absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br ${a.grad} opacity-20 blur-2xl transition-opacity group-hover:opacity-40`}
+            />
+            <div
+              className={`pa-icon-chip relative h-11 w-11 bg-gradient-to-br ${a.grad} text-white`}
+              style={{ ['--chip-glow' as string]: a.glow }}
+            >
+              <Icon name={a.icon} size={20} />
+            </div>
+            <div className="relative mt-3 font-extrabold text-white">{a.label}</div>
+            <div className="relative mt-1 text-xs font-bold text-emerald-300">{a.gain}</div>
+            <div className="relative text-xs text-white/40">{a.cost}</div>
           </button>
         ))}
       </div>
 
-      {/* Low energy warning */}
       {energy < 20 && (
-        <div className="mt-3 p-2 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
-          <p className="text-yellow-300 text-xs">
-            ⚠️ Мало энергии! Уложи питомца спать для восстановления.
-          </p>
+        <div className="flex items-center gap-2.5 rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-200">
+          <Icon name="BatteryLow" size={18} />
+          Мало энергии — уложи питомца спать
         </div>
       )}
-
-      {/* Low hunger warning */}
       {hunger < 20 && (
-        <div className="mt-2 p-2 bg-red-900/30 border border-red-500/30 rounded-lg">
-          <p className="text-red-300 text-xs">
-            🚨 Питомец голодает! Покорми его скорее!
-          </p>
+        <div className="flex items-center gap-2.5 rounded-2xl border border-rose-400/25 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          <Icon name="TriangleAlert" size={18} />
+          Питомец голодает! Покорми его скорее
         </div>
       )}
     </div>
