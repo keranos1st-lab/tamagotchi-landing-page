@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { usePetStore, type PetType } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
 import { PET_ICONS, type PetAnim } from './sprites';
+import { ChaseGame } from './ChaseGame';
 
 function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
   const type = usePetStore((s) => s.type);
   return <PetSprite type={type} anim={anim} size={size} />;
 }
 
-type MiniGame = 'none' | 'catch' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction';
+type MiniGame = 'none' | 'catch' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction' | 'chase';
 
 export function MiniGames() {
   const [activeGame, setActiveGame] = useState<MiniGame>('none');
@@ -24,6 +25,7 @@ export function MiniGames() {
   }
 
   const games = [
+    { id: 'chase' as MiniGame, icon: '🏃', name: 'Догонялки', desc: 'Убегай от питомца', reward: 'до +60 опыта', color: 'from-pink-500 to-fuchsia-500' },
     { id: 'catch' as MiniGame, icon: '🍖', name: 'Ловля еды', desc: 'Рефлексы', reward: '+15 IQ', color: 'from-orange-500 to-amber-500' },
     { id: 'memory' as MiniGame, icon: '🃏', name: 'Мемори', desc: 'Память', reward: '+20 IQ', color: 'from-blue-500 to-cyan-500' },
     { id: 'quiz' as MiniGame, icon: '🧠', name: 'Викторина', desc: 'Знания', reward: '+25 IQ', color: 'from-purple-500 to-pink-500' },
@@ -60,6 +62,7 @@ export function MiniGames() {
       {activeGame === 'snake' && <SnakeGame onComplete={() => setActiveGame('none')} />}
       {activeGame === 'tictactoe' && <TicTacToeGame onComplete={() => setActiveGame('none')} />}
       {activeGame === 'reaction' && <ReactionGame onComplete={() => setActiveGame('none')} />}
+      {activeGame === 'chase' && <ChaseGame onComplete={() => setActiveGame('none')} />}
     </div>
   );
 }
