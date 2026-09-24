@@ -31,7 +31,7 @@ export function GameScreen() {
     if (currentAction) {
       const timer = setTimeout(() => {
         setCurrentAction(null);
-      }, 2000);
+      }, 2800);
       return () => clearTimeout(timer);
     }
   }, [currentAction]);
@@ -49,7 +49,7 @@ export function GameScreen() {
       : avg <= 25
         ? 'failed'
         : energy < 20
-          ? 'waiting'
+          ? 'sleep'
           : 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 260 : 220;
 

@@ -12,7 +12,7 @@ function usePetMood() {
   const { hunger, happiness, energy, health } = usePetStore();
   const avg = (hunger + happiness + energy + health) / 4;
   if (avg <= 25) return 'failed' as const;
-  if (energy < 20) return 'waiting' as const;
+  if (energy < 20) return 'sleep' as const;
   return null;
 }
 
@@ -162,14 +162,14 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
 }
 
 function PipPet() {
-  const { type, name, hunger, happiness, energy, feed, play } = usePetStore();
+  const { type, name, hunger, happiness, energy, feed, play, sleep, train } = usePetStore();
   const moodAnim = usePetMood();
   const [anim, setAnim] = useState<PetAnim | null>(null);
 
   const act = (a: PetAnim, fn: () => void) => {
     fn();
     setAnim(a);
-    setTimeout(() => setAnim(null), 1600);
+    setTimeout(() => setAnim(null), 2400);
   };
 
   const bar = (label: string, v: number, color: string) => (
@@ -185,25 +185,37 @@ function PipPet() {
     <div className="h-screen w-full bg-gradient-to-b from-slate-900 to-indigo-950 flex flex-col items-center justify-between p-3 font-sans">
       <div className="text-sm font-bold text-white">{name}</div>
       <button onClick={() => act('wave', () => {})} className="focus:outline-none">
-        <PetSprite type={type} anim={anim ?? moodAnim ?? 'idle'} size={170} />
+        <PetSprite type={type} anim={anim ?? moodAnim ?? 'idle'} size={150} />
       </button>
       <div className="w-full space-y-1">
         {bar('Сытость', hunger, 'bg-orange-400')}
         {bar('Радость', happiness, 'bg-pink-400')}
         {bar('Энергия', energy, 'bg-sky-400')}
       </div>
-      <div className="flex w-full gap-2 mt-2">
+      <div className="grid w-full grid-cols-2 gap-1.5 mt-2">
         <button
-          onClick={() => act('review', feed)}
-          className="flex-1 rounded-lg bg-orange-500 py-1.5 text-xs font-semibold text-white hover:bg-orange-400"
+          onClick={() => act('eat', feed)}
+          className="rounded-lg bg-orange-500 py-1.5 text-xs font-semibold text-white hover:bg-orange-400"
         >
           Покормить
         </button>
         <button
-          onClick={() => act('jump', play)}
-          className="flex-1 rounded-lg bg-purple-600 py-1.5 text-xs font-semibold text-white hover:bg-purple-500"
+          onClick={() => act('play', play)}
+          className="rounded-lg bg-purple-600 py-1.5 text-xs font-semibold text-white hover:bg-purple-500"
         >
           Играть
+        </button>
+        <button
+          onClick={() => act('sleep', sleep)}
+          className="rounded-lg bg-sky-600 py-1.5 text-xs font-semibold text-white hover:bg-sky-500"
+        >
+          Спать
+        </button>
+        <button
+          onClick={() => act('study', train)}
+          className="rounded-lg bg-emerald-600 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500"
+        >
+          Учиться
         </button>
       </div>
     </div>

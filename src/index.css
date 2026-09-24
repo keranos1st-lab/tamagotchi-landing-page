@@ -593,20 +593,5 @@
   }
 }
 
-.pet-anim-idle { animation: petIdle 2.4s ease-in-out infinite; }
-.pet-anim-run { animation: petRun 0.35s ease-in-out infinite; }
-.pet-anim-wave { animation: petWave 0.6s ease-in-out infinite; }
-.pet-anim-jump { animation: petJump 0.7s cubic-bezier(.3,.7,.4,1) infinite; }
-.pet-anim-failed { animation: petFailed 1.2s ease-in-out infinite; filter: saturate(0.6) brightness(0.9); }
-.pet-anim-sleep { animation: petSleepImg 3s ease-in-out infinite; filter: brightness(0.85); }
-.pet-anim-work { animation: petWork 0.25s linear infinite; }
-.pet-anim-happy { animation: petHappy 0.8s ease-in-out infinite; }
-
-@keyframes petIdle { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.03,0.97); } }
-@keyframes petRun { 0%,100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-8%) rotate(4deg); } }
-@keyframes petWave { 0%,100% { transform: rotate(-6deg); } 50% { transform: rotate(6deg); } }
-@keyframes petJump { 0%,100% { transform: translateY(0) scale(1.06,0.94); } 20% { transform: translateY(0) scale(0.95,1.05); } 55% { transform: translateY(-28%) scale(1,1); } }
-@keyframes petFailed { 0%,100% { transform: translateX(0) scale(0.97,0.95); } 25% { transform: translateX(-3%) scale(0.97,0.95); } 75% { transform: translateX(3%) scale(0.97,0.95); } }
-@keyframes petSleepImg { 0%,100% { transform: scale(1,0.96) rotate(-3deg); } 50% { transform: scale(1.02,0.93) rotate(-3deg); } }
-@keyframes petWork { 0%,100% { transform: translate(0,0); } 25% { transform: translate(1.5%,-1%); } 75% { transform: translate(-1.5%,1%); } }
-@keyframes petHappy { 0%,100% { transform: translateY(0) rotate(0); } 25% { transform: translateY(-6%) rotate(-5deg); } 75% { transform: translateY(-6%) rotate(5deg); } }
+.pet-sad { filter: saturate(0.55) brightness(0.9); animation: petSad 1.6s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes petSad { 0%,100% { transform: scale(1,0.96) translateX(0); } 25% { transform: scale(1,0.96) translateX(-2%); } 75% { transform: scale(1,0.96) translateX(2%); } }
