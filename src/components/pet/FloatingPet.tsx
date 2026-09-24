@@ -40,8 +40,28 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   const special = useRef<number>(0);
   const posRef = useRef(pos);
   posRef.current = pos;
+  const mouse = useRef<Pt | null>(null);
+  const chaseStart = useRef(0);
+  const onCaught = useRef<() => void>(() => {});
+  const chasing = useRef(false);
+  const lastChase = useRef(0);
   const tiredRef = useRef(false);
   tiredRef.current = need === 'tired' || need === 'sick';
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      mouse.current = { x: e.clientX, y: e.clientY };
+    };
+    const onLeave = () => {
+      mouse.current = null;
+    };
+    window.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseleave', onLeave);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseleave', onLeave);
+    };
+  }, []);
 
   useEffect(() => {
     let raf = 0;
@@ -49,17 +69,30 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     const loop = (t: number) => {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
+      if (chasing.current && mouse.current && target.current) {
+        target.current = clampPos({ x: mouse.current.x - SIZE / 2, y: mouse.current.y - SIZE * 0.35 });
+      }
       const tgt = target.current;
       if (!drag.current && tgt && special.current < t) {
         const cur = posRef.current;
         const dx = tgt.x - cur.x;
         const dy = tgt.y - cur.y;
         const dist = Math.hypot(dx, dy);
-        if (dist < 4) {
+        if (dist < (chasing.current ? 30 : 4)) {
+          target.current = null;
+          if (chasing.current) {
+            chasing.current = false;
+            lastChase.current = t;
+            onCaught.current();
+          } else {
+            setAnim('idle');
+          }
+        } else if (chasing.current && t - chaseStart.current > 7000) {
+          chasing.current = false;
           target.current = null;
           setAnim('idle');
         } else {
-          const speed = tiredRef.current ? SPEED * 0.5 : SPEED;
+          const speed = tiredRef.current ? SPEED * 0.5 : chasing.current ? SPEED * 1.9 : SPEED;
           const k = Math.min(1, (speed * dt) / dist);
           setPos({ x: cur.x + dx * k, y: cur.y + dy * k });
           setAnim(dx >= 0 ? 'run-right' : 'run-left');
@@ -74,6 +107,18 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   useEffect(() => {
     const id = setInterval(() => {
       if (drag.current || target.current || special.current > performance.now() || hover) return;
+      const now = performance.now();
+      const m = mouse.current;
+      const canChase = m && !tiredRef.current && now - lastChase.current > 12000;
+      if (canChase && Math.random() < 0.35) {
+        const p = posRef.current;
+        if (Math.hypot(m.x - (p.x + SIZE / 2), m.y - (p.y + SIZE / 2)) > SIZE) {
+          chasing.current = true;
+          chaseStart.current = now;
+          target.current = clampPos({ x: m.x - SIZE / 2, y: m.y - SIZE * 0.35 });
+          return;
+        }
+      }
       if (Math.random() < (tiredRef.current ? 0.2 : 0.6)) {
         target.current = randomPoint(posRef.current);
       }
@@ -92,6 +137,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
 
   const playOnce = (a: PetAnim, ms: number, text?: string) => {
     target.current = null;
+    chasing.current = false;
     special.current = performance.now() + ms;
     setAnim(a);
     if (text) setBubble(text);
@@ -101,8 +147,15 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     }, ms);
   };
 
+  const CAUGHT_PHRASES = ['Поймал!', 'Попался!', 'Привет-привет!', 'Поиграем?', 'Я тут!'];
+  onCaught.current = () => {
+    const pick = CAUGHT_PHRASES[Math.floor(Math.random() * CAUGHT_PHRASES.length)];
+    playOnce(Math.random() < 0.5 ? 'wave' : 'jump', 1400, pick);
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    chasing.current = false;
     drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y, lastX: e.clientX, moved: false };
     target.current = null;
   };
