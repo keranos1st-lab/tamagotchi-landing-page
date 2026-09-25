@@ -9,6 +9,7 @@ interface PetSpriteProps {
   size?: number;
   className?: string;
   shadow?: boolean;
+  fx?: boolean;
 }
 
 const FLYERS: PetType[] = ['bird', 'dragon'];
@@ -70,14 +71,13 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
       return { motion: 'pm-pet', shadow: 'pm-sh-pet' };
     case 'beg':
       return { motion: 'pm-beg', shadow: 'pm-sh-beg' };
-    case 'special':
-      return { motion: `sig-${type}`, shadow: `sig-sh-${type}` };
+
     default:
       return { motion: '', shadow: '' };
   }
 }
 
-export function PetSprite({ type, anim = 'idle', size = 208, className = '', shadow = true }: PetSpriteProps) {
+export function PetSprite({ type, anim = 'idle', size = 208, className = '', shadow = true, fx = true }: PetSpriteProps) {
   const cfg = PET_SHEETS[type][anim];
   const [step, setStep] = useState(0);
   const [fidget, setFidget] = useState('');
@@ -158,7 +158,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
           </div>
         </div>
       </div>
-      <PetFx anim={anim} size={size} type={type} />
+      {fx && <PetFx anim={anim} size={size} type={type} />}
     </div>
   );
 }

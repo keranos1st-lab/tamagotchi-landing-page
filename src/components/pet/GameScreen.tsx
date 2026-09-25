@@ -14,7 +14,8 @@ import { PetStats } from './PetStats';
 import { PetChat } from './PetChat';
 import { PetHeader } from './PetHeader';
 import { sfx, signatureSfx } from './sound';
-import { SIGNATURES, pickBubble } from './signature';
+import { pickBubble } from './signature';
+import { SignatureMove, signatureDuration } from './SignatureMove';
 import { MiniGames } from './MiniGames';
 import { Achievements } from './Achievements';
 import Icon from '@/components/ui/icon';
@@ -81,7 +82,7 @@ export function GameScreen() {
     setSigKey((k) => k + 1);
     setSigBubble(pickBubble(type));
     signatureSfx(type);
-    setTimeout(() => setSigBubble(null), SIGNATURES[type].duration);
+    setTimeout(() => setSigBubble(null), signatureDuration(type));
   };
 
   const anim: PetAnim = sigBubble ? 'special' : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
@@ -165,7 +166,11 @@ export function GameScreen() {
                   className="relative cursor-grab touch-none select-none active:cursor-grabbing"
                   title="Погладь меня!"
                 >
-                  <PetSprite key={anim === 'special' ? `sig${sigKey}` : 'main'} type={type} anim={anim} size={spriteSize} />
+                  {anim === 'special' ? (
+                    <SignatureMove key={sigKey} type={type} size={spriteSize} />
+                  ) : (
+                    <PetSprite type={type} anim={anim} size={spriteSize} />
+                  )}
                   {petting.hearts.map((h) => (
                     <span
                       key={h.id}

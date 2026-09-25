@@ -9,6 +9,7 @@ import { PetActionPill, PillButton } from './PetActionPill';
 import { wantsCuddleNow } from './useCuddle';
 import { sfx, ACTION_SFX, signatureSfx } from './sound';
 import { SIGNATURES, pickBubble } from './signature';
+import { SignatureMove, signatureDuration } from './SignatureMove';
 
 const SIZE = 120;
 const SPEED = 90;
@@ -202,10 +203,12 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  const [sigRun, setSigRun] = useState(0);
   const doSignature = useRef<() => void>(() => {});
   doSignature.current = () => {
     const t = usePetStore.getState().type;
-    playOnce('special', SIGNATURES[t].duration, pickBubble(t));
+    setSigRun((k) => k + 1);
+    playOnce('special', signatureDuration(t), pickBubble(t));
     signatureSfx(t);
   };
 
@@ -389,7 +392,11 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       >
-        <PetSprite type={type} anim={shownAnim} size={SIZE} />
+        {anim === 'special' ? (
+          <SignatureMove key={sigRun} type={type} size={SIZE} />
+        ) : (
+          <PetSprite type={type} anim={shownAnim} size={SIZE} />
+        )}
       </div>
     </div>
   );
