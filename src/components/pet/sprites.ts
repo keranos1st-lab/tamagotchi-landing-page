@@ -20,7 +20,8 @@ export type PetAnim =
   | 'pet'
   | 'beg'
   | 'special'
-  | 'flap';
+  | 'flap'
+  | 'trick';
 
 export const CELL_W = 192;
 export const CELL_H = 208;
@@ -58,9 +59,10 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   special: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
   flap: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
+  trick: { src: u('/pets/cat-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 12 },
 };
 
-function buildSheet(file: string): Record<PetAnim, SheetFrame> {
+function buildSheet(file: string, trickFps = 14): Record<PetAnim, SheetFrame> {
   const base = { src: u(`/pets/${file}`), cols: 4, rows: 8 };
   const idle = { ...base, row: 0, frames: 4, fps: 4 };
   const wave = { ...base, row: 3, frames: 4, fps: 9 };
@@ -86,6 +88,7 @@ function buildSheet(file: string): Record<PetAnim, SheetFrame> {
     beg: idle,
     special: { ...play, fps: 8 },
     flap: wave,
+    trick: { src: u(`/pets/${file.replace('-sheet', '-trick')}`), cols: 8, rows: 1, row: 0, frames: 8, fps: trickFps },
   };
 }
 
