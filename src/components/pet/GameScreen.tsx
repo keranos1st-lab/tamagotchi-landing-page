@@ -8,6 +8,7 @@ import { usePetting } from './usePetting';
 import { LevelUpModal } from './LevelUpModal';
 import { useWantsCuddle } from './useCuddle';
 import { usePetStore } from '@/store/petStore';
+import { useThinkingStore } from '@/store/thinkingStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
 import { PetStats } from './PetStats';
@@ -85,7 +86,8 @@ export function GameScreen() {
     setTimeout(() => setSigBubble(null), signatureDuration(type));
   };
 
-  const anim: PetAnim = sigBubble ? 'special' : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
+  const thinking = useThinkingStore((s) => s.thinking);
+  const anim: PetAnim = sigBubble ? 'special' : thinking && type === 'cat' ? 'trick' : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
 

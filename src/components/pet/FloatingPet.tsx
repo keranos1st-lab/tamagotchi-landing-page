@@ -10,6 +10,8 @@ import { wantsCuddleNow } from './useCuddle';
 import { sfx, ACTION_SFX, signatureSfx } from './sound';
 import { SIGNATURES, pickBubble } from './signature';
 import { SignatureMove, signatureDuration } from './SignatureMove';
+import { useThinkingStore } from '@/store/thinkingStore';
+
 
 const SIZE = 120;
 const SPEED = 90;
@@ -332,7 +334,8 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     }
   };
 
-  const shownAnim: PetAnim = anim === 'idle' && moodAnim ? moodAnim : anim;
+  const thinking = useThinkingStore((s) => s.thinking);
+  const shownAnim: PetAnim = thinking && type === 'cat' && anim === 'idle' ? 'trick' : anim === 'idle' && moodAnim ? moodAnim : anim;
   const nearBottom = pos.y > window.innerHeight - SIZE - 110;
 
   return (
