@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { usePetStore } from '@/store/petStore';
 
-export const CUDDLE_AFTER_MS = 3 * 60 * 1000;
+export const CUDDLE_AFTER_MS = 5 * 60 * 1000;
 
 export function wantsCuddleNow() {
   const s = usePetStore.getState();
