@@ -27,6 +27,7 @@ const SCRIPTS: Record<PetType, Step[]> = {
     { anim: 'idle', ms: 600, cls: 'sm-dizzy', fx: 'dizzy' },
   ],
   dragon: [
+    { anim: 'flap', ms: 1100, cls: 'sm-hover' },
     { anim: 'idle', ms: 450, cls: 'sm-inhale' },
     { anim: 'run-right', ms: 1300, cls: 'sm-breathe-fire', fx: 'fire' },
     { anim: 'idle', ms: 500, cls: 'sm-cough', fx: 'smoke' },

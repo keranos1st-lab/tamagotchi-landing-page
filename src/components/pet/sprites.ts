@@ -19,7 +19,8 @@ export type PetAnim =
   | 'study'
   | 'pet'
   | 'beg'
-  | 'special';
+  | 'special'
+  | 'flap';
 
 export const CELL_W = 192;
 export const CELL_H = 208;
@@ -56,6 +57,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   special: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
+  flap: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
 };
 
 function buildSheet(file: string): Record<PetAnim, SheetFrame> {
@@ -83,6 +85,7 @@ function buildSheet(file: string): Record<PetAnim, SheetFrame> {
     pet: { ...idle, frames: 1, fps: 1 },
     beg: idle,
     special: { ...play, fps: 8 },
+    flap: wave,
   };
 }
 
@@ -91,7 +94,10 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   dog: buildSheet('dog-sheet.webp'),
   bird: buildSheet('bird-sheet.webp'),
   fox: buildSheet('fox-sheet.webp'),
-  dragon: buildSheet('dragon-sheet.webp'),
+  dragon: {
+    ...buildSheet('dragon-sheet.webp'),
+    flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
+  },
   bunny: buildSheet('bunny-sheet.webp'),
   panda: buildSheet('panda-sheet.webp'),
   owl: buildSheet('owl-sheet.webp'),

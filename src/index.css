@@ -1135,3 +1135,6 @@
 @media (prefers-reduced-motion: reduce) {
   .sm-layer, .sm-fire-core, .sm-fire-glow, .sm-ember, .sm-note, .sm-ball { animation-duration: .01ms !important; }
 }
+
+.sm-hover { animation-name: smHover; animation-timing-function: ease-in-out; }
+@keyframes smHover { 0% { transform: translateY(0); } 30% { transform: translateY(-10%); } 60% { transform: translateY(-14%); } 100% { transform: translateY(0); } }
