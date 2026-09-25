@@ -104,7 +104,7 @@ export function PetStats() {
         <div className="text-xs leading-snug">
           <div className="font-bold text-emerald-200">AI-агент активен</div>
           <div className="text-white/50">
-            {intelligence < 30 ? 'Базовые ответы — обучай питомца' : intelligence < 60 ? 'Хорошие советы' : 'Экспертные ответы'}
+            {intelligence < 25 ? 'Малыш: короткие ответы — обучай питомца' : intelligence < 50 ? 'Ученик: понятные советы' : intelligence < 75 ? 'Знаток: подробные ответы' : 'Эксперт: глубокие ответы с примерами'}
           </div>
         </div>
       </div>

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePetStore } from '@/store/petStore';
 import { generatePetResponse } from '@/utils/aiAgent';
+import { askPet, type SelectionAction } from '@/utils/petAi';
+import { RichText } from './RichText';
 import Icon from '@/components/ui/icon';
 import { PET_ICONS } from './sprites';
 import { PetSprite } from './PetSprite';
@@ -27,23 +29,44 @@ export function PetChat() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatHistory]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isTyping) return;
+  const [offline, setOffline] = useState<string | null>(null);
+  const [picked, setPicked] = useState('');
 
-    const userMessage = input.trim();
-    setInput('');
-    addChatMessage('user', userMessage);
+  const send = async (text: string, shown: string, opts: { selection?: string; action?: SelectionAction } = {}) => {
+    if (isTyping) return;
+    addChatMessage('user', shown);
     track.bump('chat');
     setIsTyping(true);
-
-    // Simulate thinking time based on intelligence
-    const thinkTime = Math.max(1800, 2000 - intelligence * 15);
-    
+    const started = Date.now();
+    const res = await askPet(usePetStore.getState(), text, opts);
+    const wait = Math.max(0, 1400 - (Date.now() - started));
     setTimeout(() => {
-      const response = generatePetResponse(userMessage, name, type, intelligence, level);
-      addChatMessage('pet', response);
+      if (res.ok) {
+        setOffline(null);
+        addChatMessage('pet', res.reply);
+      } else {
+        setOffline(res.error);
+        addChatMessage('pet', generatePetResponse(opts.selection ? `совет ${opts.selection}` : text, name, type, intelligence, level));
+      }
       setIsTyping(false);
-    }, thinkTime);
+    }, wait);
+  };
+
+  const handleSend = () => {
+    const userMessage = input.trim();
+    if (!userMessage || isTyping) return;
+    setInput('');
+    send(userMessage, userMessage);
+  };
+
+  const runSelection = (action: SelectionAction) => {
+    const sel = picked.trim();
+    if (!sel) return;
+    const labels: Record<SelectionAction, string> = { explain: 'Объясни', fix: 'Исправь', shorten: 'Сократи', advice: 'Дай совет по' };
+    const preview = sel.length > 160 ? `${sel.slice(0, 160)}…` : sel;
+    setPicked('');
+    window.getSelection()?.removeAllRanges();
+    send(sel, `${labels[action]} текст:\n«${preview}»`, { selection: sel, action });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -61,25 +84,16 @@ export function PetChat() {
     'Мотивация',
   ];
 
-  // Get selected text from page
-  const handleSendSelection = () => {
-    const selection = window.getSelection()?.toString();
-    if (selection && selection.trim()) {
-      setInput(`Проанализируй этот текст и дай совет: "${selection.trim()}"`);
-      inputRef.current?.focus();
-    }
-  };
-
-  // Listen for selection
   useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection()?.toString();
-      if (selection && selection.trim().length > 5) {
-        // Could show a floating button here
-      }
+    const onSel = () => {
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? '';
+      const node = sel?.anchorNode instanceof Element ? sel.anchorNode : sel?.anchorNode?.parentElement;
+      if (node?.closest('[data-pet-chat-input]')) return;
+      if (text.length >= 8) setPicked(text.slice(0, 6000));
     };
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    document.addEventListener('selectionchange', onSel);
+    return () => document.removeEventListener('selectionchange', onSel);
   }, []);
 
   return (
@@ -110,7 +124,7 @@ export function PetChat() {
               <Icon name="Sparkles" size={24} className="text-pink-200" />
             </div>
             <p className="mt-3 font-bold text-white">Напиши {name} что-нибудь</p>
-            <p className="mt-1 text-xs text-white/45">Чем выше интеллект — тем умнее ответы</p>
+            <p className="mt-1 max-w-xs text-xs text-white/45">Чем выше IQ — тем подробнее ответы. Выдели текст на странице — и питомец его объяснит или исправит</p>
           </div>
         )}
 
@@ -126,7 +140,7 @@ export function PetChat() {
                   : 'rounded-bl-md border border-white/[0.08] bg-white/[0.06] text-white/90'
               }`}
             >
-              {msg.text}
+              {msg.role === 'pet' ? <RichText text={msg.text} /> : msg.text}
             </div>
           </div>
         ))}
@@ -149,6 +163,42 @@ export function PetChat() {
         <div ref={chatEndRef} />
       </div>
 
+      {picked && !isTyping && (
+        <div className="mx-3 mb-2 rounded-2xl border border-cyan-300/20 bg-cyan-400/[0.07] p-2.5 pa-rise">
+          <div className="mb-2 flex items-start gap-2">
+            <Icon name="TextSelect" size={14} className="mt-0.5 shrink-0 text-cyan-200" />
+            <div className="line-clamp-2 flex-1 text-xs text-white/70">«{picked}»</div>
+            <button onClick={() => setPicked('')} className="text-white/40 hover:text-white" title="Убрать">
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ['explain', 'Объяснить', 'Lightbulb'],
+              ['fix', 'Исправить', 'SpellCheck'],
+              ['shorten', 'Сократить', 'Scissors'],
+              ['advice', 'Совет', 'Sparkles'],
+            ] as [SelectionAction, string, string][]).map(([id, label, icon]) => (
+              <button
+                key={id}
+                onClick={() => runSelection(id)}
+                className="flex items-center gap-1 rounded-full border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-1 text-xs font-bold text-cyan-100 transition hover:bg-cyan-400/25"
+              >
+                <Icon name={icon} size={12} />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {offline && (
+        <div className="mx-3 mb-2 flex items-center gap-2 rounded-xl border border-amber-300/20 bg-amber-400/[0.08] px-3 py-1.5 text-[11px] text-amber-100/90">
+          <Icon name="WifiOff" size={12} />
+          {offline === 'no_key' ? 'Умный режим ещё не подключён — отвечаю заготовками' : offline === 'no_balance' ? 'На сервисе ИИ закончился баланс — отвечаю заготовками' : 'ИИ временно недоступен — отвечаю заготовками'}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 overflow-x-auto px-4 pb-2 pt-1">
         {quickQuestions.map((q) => (
           <button
@@ -162,19 +212,12 @@ export function PetChat() {
             {q}
           </button>
         ))}
-        <button
-          onClick={handleSendSelection}
-          title="Выделите текст на странице и нажмите, чтобы отправить питомцу"
-          className="flex items-center gap-1 whitespace-nowrap rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 transition hover:bg-cyan-400/20"
-        >
-          <Icon name="TextSelect" size={12} />
-          Выделенное
-        </button>
       </div>
 
       <div className="p-3 pt-1">
         <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 focus-within:border-pink-300/40 transition">
           <input
+            data-pet-chat-input
             ref={inputRef}
             type="text"
             value={input}
