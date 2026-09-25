@@ -6,6 +6,7 @@ import type { PetAnim } from './sprites';
 import { getPipApi, openPipWindow, PipPortal } from './PipWindow';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { PetActionPill, PillButton } from './PetActionPill';
+import { wantsCuddleNow } from './useCuddle';
 
 const SIZE = 120;
 const SPEED = 90;
@@ -47,6 +48,12 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   const lastChase = useRef(0);
   const tiredRef = useRef(false);
   tiredRef.current = need === 'tired' || need === 'sick';
+  const cuddle = useRef<'none' | 'going' | 'asking'>('none');
+  const lastBeg = useRef(0);
+  const askTimer = useRef<ReturnType<typeof setTimeout>>();
+  const strokeTravel = useRef(0);
+  const strokeLast = useRef<Pt | null>(null);
+  const onArrive = useRef<() => void>(() => {});
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -83,14 +90,16 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
           if (chasing.current) {
             chasing.current = false;
             lastChase.current = t;
-            onCaught.current();
+            if (cuddle.current === 'going') onArrive.current();
+            else onCaught.current();
           } else {
             setAnim('idle');
           }
         } else if (chasing.current && t - chaseStart.current > 7000) {
           chasing.current = false;
           target.current = null;
-          setAnim('idle');
+          if (cuddle.current === 'going') onArrive.current();
+          else setAnim('idle');
         } else {
           const speed = tiredRef.current ? SPEED * 0.5 : chasing.current ? SPEED * 1.9 : SPEED;
           const k = Math.min(1, (speed * dt) / dist);
@@ -109,6 +118,21 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       if (drag.current || target.current || special.current > performance.now() || hover) return;
       const now = performance.now();
       const m = mouse.current;
+      if (
+        cuddle.current === 'none' &&
+        document.visibilityState === 'visible' &&
+        now - lastBeg.current > 90000 &&
+        wantsCuddleNow()
+      ) {
+        lastBeg.current = now;
+        cuddle.current = 'going';
+        const dest = m ?? { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+        chasing.current = true;
+        chaseStart.current = now;
+        target.current = clampPos({ x: dest.x - SIZE / 2, y: dest.y - SIZE * 0.35 });
+        setBubble('Иду к тебе!');
+        return;
+      }
       const canChase = m && !tiredRef.current && now - lastChase.current > 12000;
       if (canChase && Math.random() < 0.35) {
         const p = posRef.current;
@@ -147,6 +171,40 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     }, ms);
   };
 
+  const BEG_LINES = ['Погладь меня?', 'Я соскучился…', 'Ну погладь!', 'Можно обнимашки?'];
+  onArrive.current = () => {
+    cuddle.current = 'asking';
+    strokeTravel.current = 0;
+    special.current = performance.now() + 20000;
+    setAnim('beg');
+    setBubble(BEG_LINES[Math.floor(Math.random() * BEG_LINES.length)]);
+    clearTimeout(askTimer.current);
+    askTimer.current = setTimeout(() => {
+      if (cuddle.current !== 'asking') return;
+      cuddle.current = 'none';
+      playOnce('failed', 1800, 'Ну ладно…');
+    }, 20000);
+  };
+
+  const resolveCuddle = () => {
+    cuddle.current = 'none';
+    clearTimeout(askTimer.current);
+    usePetStore.getState().pet();
+    const lines = ['Мррр! Спасибо!', 'Вот это счастье!', 'Люблю тебя!'];
+    playOnce('pet', 2200, lines[Math.floor(Math.random() * lines.length)]);
+  };
+
+  useEffect(() => () => clearTimeout(askTimer.current), []);
+
+  const onHoverStroke = (e: React.PointerEvent) => {
+    if (drag.current || cuddle.current !== 'asking') return;
+    const prev = strokeLast.current;
+    strokeLast.current = { x: e.clientX, y: e.clientY };
+    if (!prev) return;
+    strokeTravel.current += Math.hypot(e.clientX - prev.x, e.clientY - prev.y);
+    if (strokeTravel.current > 90) resolveCuddle();
+  };
+
   const CAUGHT_PHRASES = ['Поймал!', 'Попался!', 'Привет-привет!', 'Поиграем?', 'Я тут!'];
   onCaught.current = () => {
     const pick = CAUGHT_PHRASES[Math.floor(Math.random() * CAUGHT_PHRASES.length)];
@@ -156,11 +214,13 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   const onPointerDown = (e: React.PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     chasing.current = false;
+    if (cuddle.current === 'going') cuddle.current = 'none';
     drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y, lastX: e.clientX, moved: false };
     target.current = null;
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
+    onHoverStroke(e);
     const d = drag.current;
     if (!d) return;
     const next = clampPos({ x: e.clientX - d.dx, y: e.clientY - d.dy });
@@ -177,7 +237,13 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     const moved = drag.current?.moved;
     drag.current = null;
     if (moved) {
+      if (cuddle.current !== 'none') {
+        cuddle.current = 'none';
+        clearTimeout(askTimer.current);
+      }
       playOnce('jump', 700);
+    } else if (cuddle.current === 'asking') {
+      resolveCuddle();
     } else {
       clicks.current += 1;
       if (clicks.current === 1) {
@@ -200,15 +266,29 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       className="fixed z-[60] select-none"
       style={{ left: pos.x, top: pos.y, width: SIZE }}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={() => {
+        setHover(false);
+        strokeLast.current = null;
+      }}
     >
       {bubble && (
-        <div className="absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-xl bg-white px-3 py-1 text-xs font-semibold text-slate-800 shadow-lg animate-fadeIn">
+        <div
+          key={bubble}
+          className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-xs font-extrabold shadow-lg pa-pop ${
+            anim === 'beg' ? 'text-pink-600 ring-2 ring-pink-300/60' : 'text-slate-800'
+          }`}
+        >
           {bubble}
+          <span className="absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-white" />
+        </div>
+      )}
+      {anim === 'beg' && (
+        <div className="pointer-events-none absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-pink-500/90 px-2.5 py-0.5 text-[10px] font-bold text-white shadow-lg animate-pulse">
+          Погладь мышкой
         </div>
       )}
       {!bubble && !hover && <PetEmotion need={need} compact />}
-      {hover && !bubble && (
+      {hover && !bubble && anim !== 'beg' && (
         <div
           className={`absolute left-1/2 -translate-x-1/2 z-10 animate-fadeIn ${nearBottom ? '-top-11' : '-bottom-9'}`}
         >

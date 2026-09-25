@@ -61,6 +61,13 @@ const FX: Partial<Record<PetAnim, { cls: string; items: (P & { ch: string })[] }
       { ch: '❤', x: 20, y: 24, d: 0.9, s: 0.6, c: '#f472b6' },
     ],
   },
+  beg: {
+    cls: 'fx-beg',
+    items: [
+      { ch: '❤', x: 78, y: 16, d: 0, s: 0.9, c: '#f472b6' },
+      { ch: '?', x: 18, y: 20, d: 0.8, s: 0.8, c: '#fbcfe8' },
+    ],
+  },
   pet: {
     cls: 'fx-love',
     items: [

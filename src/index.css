@@ -964,3 +964,51 @@
 @media (prefers-reduced-motion: reduce) { .fx-love, .fx-hand, .fx-blush, .fx-wavelines { animation: none !important; } }
 .pet-trail-heart { position: absolute; pointer-events: none; color: #f472b6; font-size: 18px; transform: translate(-50%, -50%); text-shadow: 0 0 10px rgba(244,114,182,.8); animation: petTrail 1.1s ease-out forwards; }
 @keyframes petTrail { 0% { transform: translate(-50%, -50%) scale(.3); opacity: 0; } 20% { transform: translate(-50%, -80%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%, -260%) scale(.7) rotate(15deg); opacity: 0; } }
+
+/* ================= Level up ================= */
+.lu-fade { animation: luFade .35s ease-out both; }
+@keyframes luFade { from { opacity: 0; } to { opacity: 1; } }
+.lu-card { animation: luCard .7s cubic-bezier(.2,1.4,.35,1) both; }
+@keyframes luCard { 0% { transform: translateY(40px) scale(.7); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.lu-rise { animation: paRise .6s cubic-bezier(.2,.8,.2,1) both; }
+.lu-rays {
+  background: repeating-conic-gradient(from 0deg, rgba(253,224,71,.14) 0deg 8deg, transparent 8deg 22deg);
+  mask-image: radial-gradient(circle, black 10%, transparent 60%);
+  -webkit-mask-image: radial-gradient(circle, black 10%, transparent 60%);
+  animation: luRays 18s linear infinite, luFade .8s ease-out both;
+}
+@keyframes luRays { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.lu-badge { animation: luSpin 4s linear infinite; }
+@keyframes luSpin { to { transform: rotate(360deg); } }
+.lu-ring { box-shadow: 0 0 0 0 rgba(244,114,182,.7); animation: luRing 1.6s ease-out .6s infinite; }
+@keyframes luRing { 0% { box-shadow: 0 0 0 0 rgba(244,114,182,.7); } 100% { box-shadow: 0 0 0 28px rgba(244,114,182,0); } }
+.lu-num { animation: luNum .6s cubic-bezier(.2,1.6,.4,1) both; text-shadow: 0 0 24px rgba(244,114,182,.9); }
+@keyframes luNum { 0% { transform: scale(2.2); opacity: 0; filter: blur(6px); } 100% { transform: scale(1); opacity: 1; filter: blur(0); } }
+.lu-pet { animation: luPet .9s cubic-bezier(.2,1.5,.4,1) .3s both; }
+@keyframes luPet { 0% { transform: translateY(60%) scale(.4); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.lu-confetti {
+  position: absolute; top: 55%;
+  opacity: 0;
+  animation-name: luConfetti;
+  animation-timing-function: cubic-bezier(.15,.6,.4,1);
+  animation-fill-mode: both;
+}
+@keyframes luConfetti {
+  0% { transform: translate(0,0) rotate(0); opacity: 1; }
+  35% { transform: translate(calc(var(--dx) * .7), var(--dy)) rotate(calc(var(--rot) * .5)); opacity: 1; }
+  100% { transform: translate(var(--dx), 60vh) rotate(var(--rot)); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .lu-rays, .lu-confetti, .lu-badge, .lu-ring { animation: none !important; opacity: 0; } }
+.pm-beg { animation: pmBeg 1.3s cubic-bezier(.4,0,.3,1) infinite; }
+@keyframes pmBeg {
+  0%,100% { transform: rotate(0) scale(1,1); }
+  15% { transform: rotate(-7deg) scale(1.04,.96); }
+  30% { transform: rotate(-7deg) translateY(-4%) scale(.98,1.03); }
+  45% { transform: rotate(0) scale(1.03,.97); }
+  60% { transform: rotate(7deg) scale(1.04,.96); }
+  75% { transform: rotate(7deg) translateY(-4%) scale(.98,1.03); }
+}
+.pm-sh-beg { animation: pmShBeg 1.3s ease-in-out infinite; }
+@keyframes pmShBeg { 0%,45%,100% { transform: translateX(-50%) scale(1); } 30%,75% { transform: translateX(-50%) scale(.85); opacity: .75; } }
+.fx-beg { animation: fxBeg 1.3s ease-in-out infinite; }
+@keyframes fxBeg { 0%,100% { transform: scale(.8) translateY(0); opacity: .6; } 50% { transform: scale(1.25) translateY(-20%); opacity: 1; } }

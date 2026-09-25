@@ -44,6 +44,9 @@ export interface PetState {
   catchUp: () => void;
   resetPet: () => void;
   lastTick: number;
+  lastPetted: number;
+  levelUp: { from: number; to: number; stageFrom: EvolutionStage; stageTo: EvolutionStage; id: number } | null;
+  clearLevelUp: () => void;
 }
 
 const PET_NAMES: Record<PetType, string> = {
@@ -63,6 +66,9 @@ export const usePetStore = create<PetState>()(
   persist(
     (set, get) => ({
   lastTick: Date.now(),
+  lastPetted: Date.now(),
+  levelUp: null,
+  clearLevelUp: () => set({ levelUp: null }),
   name: '',
   type: 'cat',
   level: 1,
@@ -115,6 +121,7 @@ export const usePetStore = create<PetState>()(
     set({
       happiness: Math.min(100, state.happiness + 2),
       lastInteraction: Date.now(),
+      lastPetted: Date.now(),
     });
     get().gainExp(1);
   },
@@ -217,6 +224,17 @@ export const usePetStore = create<PetState>()(
       level: newLevel,
       expToNext: newExpToNext,
       stage: newStage,
+      ...(newLevel > state.level
+        ? {
+            levelUp: {
+              from: state.levelUp?.from ?? state.level,
+              to: newLevel,
+              stageFrom: state.levelUp?.stageFrom ?? state.stage,
+              stageTo: newStage,
+              id: Date.now(),
+            },
+          }
+        : {}),
     });
   },
 
@@ -239,7 +257,8 @@ export const usePetStore = create<PetState>()(
       name: 'petagent-save',
       version: 1,
       partialize: (s) => {
-        const { chatHistory, ...rest } = s;
+        const { chatHistory, levelUp: _lu, ...rest } = s;
+        void _lu;
         return { ...rest, chatHistory: chatHistory.slice(-50) };
       },
     },

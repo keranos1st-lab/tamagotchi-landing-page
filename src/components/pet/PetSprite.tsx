@@ -68,6 +68,8 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
       return { motion: 'pm-wave', shadow: 'pm-sh-wave' };
     case 'pet':
       return { motion: 'pm-pet', shadow: 'pm-sh-pet' };
+    case 'beg':
+      return { motion: 'pm-beg', shadow: 'pm-sh-beg' };
     default:
       return { motion: '', shadow: '' };
   }

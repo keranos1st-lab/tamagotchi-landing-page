@@ -5,6 +5,8 @@ import { FloatingPet } from './FloatingPet';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetNotifications } from './useNotifications';
 import { usePetting } from './usePetting';
+import { LevelUpModal } from './LevelUpModal';
+import { useWantsCuddle } from './useCuddle';
 import { usePetStore } from '@/store/petStore';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
@@ -38,6 +40,7 @@ export function GameScreen() {
   const need = usePetNeed();
   usePetNotifications();
   const petting = usePetting();
+  const wantsCuddle = useWantsCuddle();
 
   useEffect(() => {
     const catchUp = usePetStore.getState().catchUp;
@@ -68,13 +71,14 @@ export function GameScreen() {
   }
 
   const mood = getMood(hunger, happiness, energy, health);
-  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : needAnim(need) ?? 'idle';
+  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
 
   return (
     <div className="pa-app flex flex-col">
       <FloatingPet />
+      <LevelUpModal />
       <PetHeader />
 
       <main className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[280px_1fr]">
@@ -118,7 +122,15 @@ export function GameScreen() {
 
             <div className="absolute inset-x-0 bottom-[9%] z-10 flex justify-center">
               <div className="relative">
-                {!currentAction && !petting.petting && !petting.bubble && <PetEmotion need={need} />}
+                {!currentAction && !petting.petting && !petting.bubble && !wantsCuddle && <PetEmotion need={need} />}
+                {!currentAction && !petting.petting && !petting.bubble && wantsCuddle && (
+                  <div className="pointer-events-none absolute -top-4 left-1/2 z-20 -translate-x-1/2 pa-pop">
+                    <div className="relative whitespace-nowrap rounded-2xl bg-white px-3.5 py-1.5 text-sm font-extrabold text-pink-600 ring-2 ring-pink-300/60 shadow-[0_10px_30px_-10px_rgba(236,72,153,0.8)]">
+                      Я соскучился… погладь меня!
+                      <span className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
+                    </div>
+                  </div>
+                )}
                 {petting.bubble && (
                   <div key={petting.bubble} className="pointer-events-none absolute -top-4 left-1/2 z-20 -translate-x-1/2 pa-pop">
                     <div className="relative whitespace-nowrap rounded-2xl bg-white px-3.5 py-1.5 text-sm font-extrabold text-pink-600 shadow-[0_10px_30px_-10px_rgba(236,72,153,0.8)]">

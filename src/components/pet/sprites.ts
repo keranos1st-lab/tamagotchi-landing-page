@@ -17,7 +17,8 @@ export type PetAnim =
   | 'sleep'
   | 'play'
   | 'study'
-  | 'pet';
+  | 'pet'
+  | 'beg';
 
 export const CELL_W = 192;
 export const CELL_H = 208;
@@ -50,6 +51,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   play: { ...KODIK_CARE, row: 2, frames: 4, fps: 6 },
   study: { ...KODIK_CARE, row: 3, frames: 4, fps: 4 },
   pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
+  beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
 };
 
 function buildSheet(file: string): Record<PetAnim, SheetFrame> {
@@ -75,6 +77,7 @@ function buildSheet(file: string): Record<PetAnim, SheetFrame> {
     play,
     study,
     pet: { ...idle, frames: 1, fps: 1 },
+    beg: idle,
   };
 }
 
