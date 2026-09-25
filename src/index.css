@@ -1143,3 +1143,66 @@
 @keyframes smWag { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-2deg); } 75% { transform: rotate(2deg); } }
 .sm-laptop { animation-name: smLaptop; animation-timing-function: ease-out; }
 @keyframes smLaptop { 0% { transform: scale(.9,1.08) translateY(-4%); } 12% { transform: scale(1.04,.96); } 22% { transform: scale(1); } 40%,60%,80% { transform: translateY(.6%); } 50%,70%,90% { transform: translateY(0); } 100% { transform: none; } }
+
+.tk-float { position: absolute; opacity: 0; animation: tkFloat 1.8s ease-out infinite; }
+@keyframes tkFloat { 0% { transform: translate(0, 30%) scale(.5); opacity: 0; } 20% { opacity: 1; transform: translate(0,0) scale(1); } 100% { transform: translate(30%, -160%) scale(.9) rotate(8deg); opacity: 0; } }
+.tk-smoke { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(248,250,252,.95), rgba(226,232,240,.6) 50%, transparent 72%); filter: blur(1px); opacity: 0; animation: tkSmoke 1.8s ease-out infinite; }
+@keyframes tkSmoke { 0% { transform: translate(-50%, 0) scale(.3); opacity: 0; } 15% { opacity: 1; } 60% { opacity: .7; } 100% { transform: translate(-10%, -320%) scale(2); opacity: 0; } }
+
+/* ================= Achievements ================= */
+.ach-hero {
+  background: linear-gradient(135deg, rgba(251,191,36,0.14), rgba(236,72,153,0.08) 60%, rgba(255,255,255,0.03));
+  border: 1px solid rgba(251,191,36,0.22);
+  transition: transform .2s, border-color .2s;
+}
+.ach-hero:hover { transform: translateY(-1px); border-color: rgba(251,191,36,0.4); }
+.ach-hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.12) 50%, transparent 70%);
+  transform: translateX(-100%); animation: achShine 4.5s ease-in-out infinite;
+}
+@keyframes achShine { 0%, 70% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+.ach-medal-on { overflow: hidden; }
+.ach-medal-on::after {
+  content: ''; position: absolute; inset: 0; border-radius: 9999px; pointer-events: none;
+  background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,0.55) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+.ach-epic.ach-medal-on::after, .ach-legendary.ach-medal-on::after { animation: achShine 3.2s ease-in-out infinite; }
+.ach-legendary.ach-medal-on { animation: achPulse 2.4s ease-in-out infinite; }
+@keyframes achPulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.15) saturate(1.1); } }
+
+.ach-dialog { background: linear-gradient(170deg, #1d1538 0%, #120d24 100%) !important; border-radius: 24px !important; }
+.ach-dialog > button { color: rgba(255,255,255,0.6); }
+.ach-dialog-glow {
+  position: absolute; inset: -40% -10% auto -10%; height: 220px; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(251,191,36,0.22), transparent), radial-gradient(closest-side at 80% 50%, rgba(236,72,153,0.18), transparent);
+  filter: blur(10px);
+}
+.ach-card { transition: transform .2s, background .2s; }
+.ach-card:hover { transform: translateY(-1px); }
+.ach-card-on.ach-common { background: linear-gradient(135deg, rgba(203,213,225,0.08), rgba(255,255,255,0.02)); }
+.ach-card-on.ach-rare { background: linear-gradient(135deg, rgba(56,189,248,0.12), rgba(255,255,255,0.02)); }
+.ach-card-on.ach-epic { background: linear-gradient(135deg, rgba(217,70,239,0.14), rgba(255,255,255,0.02)); }
+.ach-card-on.ach-legendary { background: linear-gradient(135deg, rgba(251,191,36,0.18), rgba(244,63,94,0.06) 70%, rgba(255,255,255,0.02)); }
+
+.ach-toast { background: linear-gradient(135deg, rgba(38,28,72,0.97), rgba(22,16,44,0.97)); backdrop-filter: blur(16px); cursor: pointer; }
+.ach-toast-in { animation: achIn .6s cubic-bezier(.2,1.4,.4,1) both; }
+.ach-toast-out { animation: achOut .35s ease-in both; }
+@keyframes achIn { 0% { transform: translateY(-140%) scale(.9); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes achOut { to { transform: translateY(-140%) scale(.95); opacity: 0; } }
+.ach-toast-medal { animation: achMedal .9s cubic-bezier(.2,1.6,.4,1) .15s both; }
+@keyframes achMedal { 0% { transform: scale(0) rotate(-120deg); } 100% { transform: none; } }
+.ach-toast-shine {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.18) 50%, transparent 70%);
+  animation: achSweep 1.1s ease-out .3s both;
+}
+@keyframes achSweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+.ach-spark { position: absolute; bottom: 40%; width: 5px; height: 5px; border-radius: 9999px; opacity: 0; animation: achSpark .9s ease-out both; }
+@keyframes achSpark { 0% { transform: translateY(0) scale(.4); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateY(-40px) scale(1); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ach-hero::after, .ach-medal-on::after, .ach-legendary.ach-medal-on, .ach-toast-in, .ach-toast-medal, .ach-spark { animation: none !important; }
+}

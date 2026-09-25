@@ -3,6 +3,8 @@ import { usePetStore, type PetType } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
 import { PET_ICONS, type PetAnim } from './sprites';
 import { ChaseGame } from './ChaseGame';
+import { track } from '@/store/achievementStore';
+
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
@@ -195,6 +197,9 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
     if (gameOver) {
       sfx.win();
       gainExp(Math.floor(score / 2));
+      track.game('catch');
+      track.best('catchBest', score);
+      if (score >= 100) track.win();
     }
   }, [gameOver]);
 
@@ -278,6 +283,8 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
             setGameWon(true);
             sfx.win();
             gainExp(Math.max(10, 50 - moves * 2));
+            track.game('memory');
+            track.win();
           }
         }, 500);
       } else {
@@ -368,6 +375,14 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
       if (currentQ + 1 >= questions.length) {
         setGameOver(true);
         gainExp(score * 5 + (index === questions[currentQ].correct ? 5 : 0));
+        {
+          const final = score + (index === questions[currentQ].correct ? 1 : 0);
+          track.game('quiz');
+          if (final === questions.length) {
+            track.bump('quizPerfect');
+            track.win();
+          }
+        }
       } else {
         setCurrentQ(q => q + 1);
         setSelected(null);
@@ -491,6 +506,9 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     if (gameOver) {
       gainExp(Math.floor(score / 2));
+      track.game('snake');
+      track.best('snakeBest', Math.round(score / 10));
+      if (score >= 100) track.win();
     }
   }, [gameOver]);
 
@@ -656,6 +674,11 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
       if (result === 'X') sfx.win();
       if (result === 'X') gainExp(20);
       else if (result === 'draw') gainExp(10);
+      track.game('tictactoe');
+      if (result === 'X') {
+        track.win();
+        track.bump('tttWins');
+      }
       return;
     }
 
@@ -780,6 +803,9 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
         setTimeout(() => {
           setGameState('done');
           gainExp(Math.max(10, Math.floor(1000 / (bestTime || time))));
+          track.game('reaction');
+          track.best('reactionBest', Math.min(bestTime ?? time, time), true);
+          track.win();
         }, 1500);
       } else {
         setTimeout(() => {

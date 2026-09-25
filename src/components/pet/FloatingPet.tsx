@@ -11,6 +11,8 @@ import { sfx, ACTION_SFX, signatureSfx } from './sound';
 import { SIGNATURES, pickBubble } from './signature';
 import { SignatureMove, signatureDuration } from './SignatureMove';
 import { useThinkingStore } from '@/store/thinkingStore';
+import { track } from '@/store/achievementStore';
+import { ThinkFxLayer, thinkingAnim } from './thinking';
 
 
 const SIZE = 120;
@@ -212,6 +214,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     setSigRun((k) => k + 1);
     playOnce('special', signatureDuration(t), pickBubble(t));
     signatureSfx(t);
+    track.bump('tricks');
   };
 
   const stopActivity = () => {
@@ -335,7 +338,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   };
 
   const thinking = useThinkingStore((s) => s.thinking);
-  const shownAnim: PetAnim = thinking && type === 'cat' && anim === 'idle' ? 'trick' : anim === 'idle' && moodAnim ? moodAnim : anim;
+  const shownAnim: PetAnim = thinking && anim === 'idle' ? thinkingAnim(type) : anim === 'idle' && moodAnim ? moodAnim : anim;
   const nearBottom = pos.y > window.innerHeight - SIZE - 110;
 
   return (
@@ -398,7 +401,9 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         {anim === 'special' ? (
           <SignatureMove key={sigRun} type={type} size={SIZE} />
         ) : (
-          <PetSprite type={type} anim={shownAnim} size={SIZE} />
+          <PetSprite type={type} anim={shownAnim} size={SIZE}>
+            {thinking && anim === 'idle' && <ThinkFxLayer type={type} size={SIZE} />}
+          </PetSprite>
         )}
       </div>
     </div>

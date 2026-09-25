@@ -5,6 +5,7 @@ import type { PetAnim } from './sprites';
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
+import { track } from '@/store/achievementStore';
 
 const DURATION = 30;
 const PET = 70;
@@ -106,6 +107,8 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
       else sfx.lose();
       gainExp(reward);
       playStat();
+      track.game('chase');
+      if (catchesRef.current === 0) track.win();
     }
   }, [phase, gainExp, playStat, reward]);
 

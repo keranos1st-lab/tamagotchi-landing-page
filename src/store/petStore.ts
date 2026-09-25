@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { track, useAchievementStore } from './achievementStore';
 
 export type PetType = 'cat' | 'dog' | 'bird' | 'fox' | 'dragon' | 'bunny' | 'panda' | 'owl';
 
@@ -87,6 +88,7 @@ export const usePetStore = create<PetState>()(
   chatHistory: [],
 
   selectPet: (type, name) => {
+    useAchievementStore.getState().markPet(type);
     set({
       type,
       name,
@@ -107,6 +109,7 @@ export const usePetStore = create<PetState>()(
   feed: () => {
     const state = get();
     if (state.energy < 5) return;
+    track.bump('feed');
     set({
       hunger: Math.min(100, state.hunger + 25),
       happiness: Math.min(100, state.happiness + 5),
@@ -118,6 +121,7 @@ export const usePetStore = create<PetState>()(
 
   pet: () => {
     const state = get();
+    track.bump('pets');
     set({
       happiness: Math.min(100, state.happiness + 2),
       lastInteraction: Date.now(),
@@ -129,6 +133,7 @@ export const usePetStore = create<PetState>()(
   play: () => {
     const state = get();
     if (state.energy < 15) return;
+    track.bump('play');
     set({
       happiness: Math.min(100, state.happiness + 30),
       energy: Math.max(0, state.energy - 20),
@@ -141,6 +146,7 @@ export const usePetStore = create<PetState>()(
   train: () => {
     const state = get();
     if (state.energy < 20) return;
+    track.bump('train');
     set({
       intelligence: Math.min(100, state.intelligence + 5),
       energy: Math.max(0, state.energy - 25),
@@ -153,6 +159,7 @@ export const usePetStore = create<PetState>()(
 
   sleep: () => {
     const state = get();
+    track.bump('sleep');
     set({
       energy: Math.min(100, state.energy + 50),
       health: Math.min(100, state.health + 10),
@@ -164,6 +171,7 @@ export const usePetStore = create<PetState>()(
 
   heal: () => {
     const state = get();
+    track.bump('heal');
     set({
       health: Math.min(100, state.health + 30),
       lastInteraction: Date.now(),

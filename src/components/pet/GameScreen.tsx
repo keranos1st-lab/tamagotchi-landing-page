@@ -9,6 +9,8 @@ import { LevelUpModal } from './LevelUpModal';
 import { useWantsCuddle } from './useCuddle';
 import { usePetStore } from '@/store/petStore';
 import { useThinkingStore } from '@/store/thinkingStore';
+import { track } from '@/store/achievementStore';
+import { ThinkFxLayer, thinkingAnim } from './thinking';
 import { PetSelection } from './PetSelection';
 import { PetActions } from './PetActions';
 import { PetStats } from './PetStats';
@@ -19,6 +21,8 @@ import { pickBubble } from './signature';
 import { SignatureMove, signatureDuration } from './SignatureMove';
 import { MiniGames } from './MiniGames';
 import { Achievements } from './Achievements';
+import { AchievementToast } from './achievements/AchievementToast';
+import { useAchievementWatcher } from './achievements/useAchievements';
 import Icon from '@/components/ui/icon';
 
 import type { ActionType } from './sprites';
@@ -39,6 +43,7 @@ const STARS = Array.from({ length: 18 }).map((_, i) => ({
 
 export function GameScreen() {
   const { hasSelectedPet, hunger, happiness, energy, health, tick, type, level, stage, intelligence } = usePetStore();
+  useAchievementWatcher();
   const [activeTab, setActiveTab] = useState<Tab>('actions');
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
   const [sigBubble, setSigBubble] = useState<string | null>(null);
@@ -83,11 +88,12 @@ export function GameScreen() {
     setSigKey((k) => k + 1);
     setSigBubble(pickBubble(type));
     signatureSfx(type);
+    track.bump('tricks');
     setTimeout(() => setSigBubble(null), signatureDuration(type));
   };
 
   const thinking = useThinkingStore((s) => s.thinking);
-  const anim: PetAnim = sigBubble ? 'special' : thinking && type === 'cat' ? 'trick' : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
+  const anim: PetAnim = sigBubble ? 'special' : thinking ? thinkingAnim(type) : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
 
@@ -95,6 +101,7 @@ export function GameScreen() {
     <div className="pa-app flex flex-col">
       <FloatingPet />
       <LevelUpModal />
+      <AchievementToast />
       <PetHeader />
 
       <main className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[280px_1fr]">
@@ -171,7 +178,9 @@ export function GameScreen() {
                   {anim === 'special' ? (
                     <SignatureMove key={sigKey} type={type} size={spriteSize} />
                   ) : (
-                    <PetSprite type={type} anim={anim} size={spriteSize} />
+                    <PetSprite type={type} anim={anim} size={spriteSize}>
+                      {thinking && !sigBubble && <ThinkFxLayer type={type} size={spriteSize} />}
+                    </PetSprite>
                   )}
                   {petting.hearts.map((h) => (
                     <span
