@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PetType } from '@/store/petStore';
 import { CELL_H, CELL_W, PET_SHEETS, type PetAnim } from './sprites';
 import { PetFx } from './PetFx';
@@ -10,6 +10,8 @@ interface PetSpriteProps {
   className?: string;
   shadow?: boolean;
   fx?: boolean;
+  still?: boolean;
+  children?: ReactNode;
 }
 
 const FLYERS: PetType[] = ['bird', 'dragon'];
@@ -77,7 +79,7 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
   }
 }
 
-export function PetSprite({ type, anim = 'idle', size = 208, className = '', shadow = true, fx = true }: PetSpriteProps) {
+export function PetSprite({ type, anim = 'idle', size = 208, className = '', shadow = true, fx = true, still = false, children }: PetSpriteProps) {
   const cfg = PET_SHEETS[type][anim];
   const [step, setStep] = useState(0);
   const [fidget, setFidget] = useState('');
@@ -122,7 +124,9 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
   const cw = cfg.cw ?? CELL_W;
   const ch = cfg.ch ?? CELL_H;
   const w = cw * (size / ch);
-  const { motion, shadow: shadowCls } = motionFor(type, anim);
+  const mf = motionFor(type, anim);
+  const motion = still ? '' : mf.motion;
+  const shadowCls = still ? '' : mf.shadow;
   const isFlyer = FLYERS.includes(type);
   const delay = anim === 'idle' ? `${phase}s` : undefined;
 
@@ -142,6 +146,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
       <div className={`pm-layer ${motion}`} style={{ animationDelay: delay }}>
         <div className={`pm-layer ${fidget}`}>
           <div key={anim} className="pm-layer pm-enter">
+            {children}
             <div
               role="img"
               aria-label="Питомец"
@@ -153,6 +158,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
                 backgroundRepeat: 'no-repeat',
                 backgroundSize: `${cfg.cols * w}px ${cfg.rows * size}px`,
                 backgroundPosition: `${-frame * w}px ${-cfg.row * size}px`,
+                position: 'relative',
               }}
             />
           </div>

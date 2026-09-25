@@ -58,7 +58,7 @@ const SCRIPTS: Record<PetType, Step[]> = {
 export const signatureDuration = (type: PetType) => SCRIPTS[type].reduce((s, x) => s + x.ms, 0);
 
 const MOUTH: Partial<Record<PetType, { x: number; y: number }>> = {
-  dragon: { x: 74, y: 58 },
+  dragon: { x: 72.5, y: 57.5 },
 };
 
 export function SignatureMove({ type, size, onDone }: { type: PetType; size: number; onDone?: () => void }) {
@@ -93,22 +93,23 @@ export function SignatureMove({ type, size, onDone }: { type: PetType; size: num
   return (
     <div className="relative" style={{ width: w, height: size }} aria-label={SIGNATURES[type].label}>
       <div key={i} className={`sm-layer ${step.cls ?? ''}`} style={{ animationDuration: `${step.ms}ms` }}>
-        <PetSprite type={type} anim={step.anim} size={size} fx={false} />
+        <PetSprite type={type} anim={step.anim} size={size} fx={false} still={step.fx === 'fire'}>
+          {step.fx === 'fire' && mouth && (
+            <div className="pointer-events-none absolute" style={{ left: `${mouth.x}%`, top: `${mouth.y}%` }}>
+              <span className="sm-fire-glow" style={{ width: size * 0.62, height: size * 0.2 }} />
+              <span className="sm-fire-core" style={{ width: size * 0.55, height: size * 0.11 }} />
+              {Array.from({ length: 6 }).map((_, k) => (
+                <span
+                  key={k}
+                  className="sm-ember"
+                  style={{ animationDelay: `${k * 0.15}s`, ['--ty' as string]: `${(k % 3 - 1) * size * 0.05}px`, width: size * 0.022, height: size * 0.022 }}
+                />
+              ))}
+            </div>
+          )}
+        </PetSprite>
       </div>
 
-      {step.fx === 'fire' && mouth && (
-        <div className="pointer-events-none absolute" style={{ left: `${mouth.x}%`, top: `${mouth.y}%` }}>
-          <span className="sm-fire-core" style={{ width: size * 0.9, height: size * 0.3 }} />
-          <span className="sm-fire-glow" style={{ width: size * 1.1, height: size * 0.45 }} />
-          {Array.from({ length: 9 }).map((_, k) => (
-            <span
-              key={k}
-              className="sm-ember"
-              style={{ animationDelay: `${k * 0.12}s`, ['--ty' as string]: `${(k % 3 - 1) * size * 0.12}px`, width: size * 0.035, height: size * 0.035 }}
-            />
-          ))}
-        </div>
-      )}
       {step.fx === 'smoke' && mouth && (
         <div className="pointer-events-none absolute" style={{ left: `${mouth.x}%`, top: `${mouth.y - 4}%` }}>
           {[0, 1, 2].map((k) => (

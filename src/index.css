@@ -1055,7 +1055,7 @@
 .sm-inhale { animation-name: smInhale; }
 @keyframes smInhale { 0% { transform: scale(1); } 100% { transform: scale(1.08,1.04) translateY(-2%); } }
 .sm-breathe-fire { animation-name: smBreathe; }
-@keyframes smBreathe { 0% { transform: translateX(0) scale(1.06,1.02); } 10% { transform: translateX(-4%) scale(.98,1); } 20%,85% { transform: translateX(-6%) scale(1,1); } 30%,50%,70% { transform: translateX(-7%) rotate(-1deg); } 40%,60%,80% { transform: translateX(-5%) rotate(1deg); } 100% { transform: translateX(0); } }
+@keyframes smBreathe { 0% { transform: translateX(0) scale(1.04,1.02); } 12% { transform: translateX(-4%); } 30%,50%,70% { transform: translateX(-5%) translateY(-.5%); } 40%,60%,80% { transform: translateX(-4.5%) translateY(.5%); } 100% { transform: translateX(0); } }
 .sm-cough { animation-name: smCough; }
 @keyframes smCough { 0%,100% { transform: scale(1); } 30% { transform: scale(1.04,.95); } 60% { transform: scale(.98,1.02); } }
 
@@ -1084,23 +1084,24 @@
 .sm-hop { animation-name: smHopHi; }
 
 /* --- effects --- */
-.sm-fire-core, .sm-fire-glow { position: absolute; left: 0; top: 0; transform-origin: 0% 50%; border-radius: 12% 60% 60% 12% / 45% 50% 50% 45%; }
+.sm-fire-core, .sm-fire-glow { position: absolute; left: 0; top: 0; transform-origin: 0% 50%; translate: 0 -50%; }
 .sm-fire-core {
-  translate: 0 -50%;
-  background: radial-gradient(ellipse 60% 50% at 8% 50%, #fffbe6 0%, #fde68a 22%, #fb923c 48%, #ef4444 70%, rgba(239,68,68,0) 82%);
-  filter: blur(1px);
-  animation: smFire 1.3s ease-out both, smFlicker .09s steps(2) infinite;
+  border-radius: 40% 70% 70% 40% / 50%;
+  background: linear-gradient(90deg, #fffbe6 0%, #fde68a 14%, #fb923c 42%, #ef4444 72%, rgba(239,68,68,0) 100%);
+  clip-path: polygon(0 40%, 55% 12%, 85% 6%, 100% 30%, 92% 50%, 100% 72%, 85% 94%, 55% 88%, 0 60%);
+  filter: blur(.6px);
+  animation: smFire 1.3s ease-out both, smFlicker .1s steps(2) infinite;
 }
 .sm-fire-glow {
-  translate: -4% -50%;
-  background: radial-gradient(ellipse 60% 55% at 10% 50%, rgba(251,146,60,.55), rgba(251,146,60,0) 70%);
-  filter: blur(10px);
+  background: linear-gradient(90deg, rgba(253,186,116,.7), rgba(251,146,60,.35) 50%, rgba(251,146,60,0));
+  clip-path: polygon(0 32%, 70% 4%, 100% 50%, 70% 96%, 0 68%);
+  filter: blur(6px);
   animation: smFire 1.3s ease-out both;
 }
-@keyframes smFire { 0% { transform: scaleX(0) scaleY(.3); opacity: 0; } 12% { transform: scaleX(.7) scaleY(.8); opacity: 1; } 25% { transform: scaleX(1) scaleY(1); } 80% { transform: scaleX(1.05) scaleY(1.05); opacity: 1; } 100% { transform: scaleX(1.2) scaleY(.5); opacity: 0; } }
-@keyframes smFlicker { 0% { filter: blur(1px) brightness(1); } 100% { filter: blur(1.5px) brightness(1.15); } }
+@keyframes smFire { 0% { transform: scaleX(0); opacity: 0; } 12% { transform: scaleX(.6); opacity: 1; } 25% { transform: scaleX(1); } 80% { transform: scaleX(1.05) scaleY(1.1); opacity: 1; } 100% { transform: scaleX(1.15) scaleY(.4); opacity: 0; } }
+@keyframes smFlicker { 0% { filter: blur(.6px) brightness(1); } 100% { filter: blur(1px) brightness(1.2); } }
 .sm-ember { position: absolute; left: 0; top: 0; border-radius: 50%; background: #fde047; box-shadow: 0 0 6px #fb923c; animation: smEmber .9s ease-out infinite; opacity: 0; }
-@keyframes smEmber { 0% { transform: translate(10%, 0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(700%, var(--ty)); opacity: 0; } }
+@keyframes smEmber { 0% { transform: translate(0, -50%); opacity: 0; } 15% { opacity: 1; } 100% { transform: translate(1100%, var(--ty)); opacity: 0; } }
 .sm-smoke { position: absolute; left: 0; top: 0; border-radius: 50%; background: rgba(203,213,225,.55); filter: blur(3px); animation: smSmoke .6s ease-out both; }
 @keyframes smSmoke { 0% { transform: scale(.3); opacity: .8; } 100% { transform: translate(60%, -180%) scale(1.6); opacity: 0; } }
 
