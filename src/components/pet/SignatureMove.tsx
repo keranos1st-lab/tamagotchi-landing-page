@@ -8,8 +8,9 @@ type Step = { anim: PetAnim; ms: number; cls?: string; fx?: string };
 
 const SCRIPTS: Record<PetType, Step[]> = {
   cat: [
-    { anim: 'working', ms: 1400, cls: 'sm-focus', fx: 'code' },
-    { anim: 'trick', ms: 1300, cls: 'sm-proud', fx: 'check' },
+    { anim: 'idle', ms: 450, cls: 'sm-crouch' },
+    { anim: 'trick', ms: 2600, cls: 'sm-laptop', fx: 'code' },
+    { anim: 'trick', ms: 700, cls: 'sm-proud', fx: 'check' },
     { anim: 'wave', ms: 500 },
   ],
   dog: [

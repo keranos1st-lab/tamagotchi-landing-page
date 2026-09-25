@@ -59,7 +59,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   special: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
   flap: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
-  trick: { src: u('/pets/cat-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 12 },
+  trick: { src: u('/pets/cat-laptop.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 10, cw: 384, ch: 416 },
 };
 
 function buildSheet(file: string, trickFps = 14): Record<PetAnim, SheetFrame> {
