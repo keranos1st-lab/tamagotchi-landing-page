@@ -1012,3 +1012,164 @@
 @keyframes pmShBeg { 0%,45%,100% { transform: translateX(-50%) scale(1); } 30%,75% { transform: translateX(-50%) scale(.85); opacity: .75; } }
 .fx-beg { animation: fxBeg 1.3s ease-in-out infinite; }
 @keyframes fxBeg { 0%,100% { transform: scale(.8) translateY(0); opacity: .6; } 50% { transform: scale(1.25) translateY(-20%); opacity: 1; } }
+
+/* ================= v2 pets: life on static frames ================= */
+.pm-v2 { filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
+.pm-alive { transform-origin: 50% 100%; }
+.pm-alive-idle, .pm-alive-beg { animation: pmLifeIdle 2.6s ease-in-out infinite; }
+@keyframes pmLifeIdle { 0%,100% { transform: scale(1,1); } 45% { transform: scale(1.018,.982); } 55% { transform: scale(1.018,.982); } }
+.pm-alive-run-right, .pm-alive-run-left { animation: pmLifeRun .28s ease-in-out infinite; }
+@keyframes pmLifeRun { 0%,100% { transform: scale(1.03,.97); } 50% { transform: scale(.98,1.03) translateY(-2%); } }
+.pm-alive-eat { animation: pmLifeEat .42s ease-in-out infinite; transform-origin: 50% 70%; }
+@keyframes pmLifeEat { 0%,100% { transform: rotate(0) scale(1); } 50% { transform: rotate(-2deg) scale(1.02,.97); } }
+.pm-alive-sleep, .pm-alive-waiting { animation: pmLifeSleep 3.2s ease-in-out infinite; }
+@keyframes pmLifeSleep { 0%,100% { transform: scale(1,1); } 50% { transform: scale(1.035,.955); } }
+.pm-alive-study, .pm-alive-working { animation: pmLifeStudy 3s ease-in-out infinite; }
+@keyframes pmLifeStudy { 0%,60%,100% { transform: rotate(0); } 70% { transform: rotate(-2deg); } 85% { transform: rotate(1.5deg); } }
+.pm-alive-wave, .pm-alive-review { animation: pmLifeWave .5s ease-in-out infinite; transform-origin: 30% 100%; }
+@keyframes pmLifeWave { 0%,100% { transform: rotate(-1.5deg); } 50% { transform: rotate(2deg); } }
+.pm-alive-play, .pm-alive-jump { animation: pmLifeWave .35s ease-in-out infinite; }
+
+/* ================= Signature moves ================= */
+/* dog: fetch — runs off, comes back with ball, proud bounce */
+.sig-dog { animation: sigDog 2.6s cubic-bezier(.45,0,.3,1) both; }
+@keyframes sigDog {
+  0% { transform: translateX(0) scale(1); }
+  12% { transform: translateX(0) scale(1.08,.9); }
+  30% { transform: translateX(60%) translateY(-10%) scale(.9) rotate(8deg); opacity: .85; }
+  45% { transform: translateX(80%) scale(.85); opacity: 0; }
+  55% { transform: translateX(-40%) scale(.9) rotate(-6deg); opacity: .8; }
+  72% { transform: translateX(0) translateY(-6%) scale(1); opacity: 1; }
+  80% { transform: translateY(0) scale(1.06,.94); }
+  88% { transform: translateY(-5%) scale(.97,1.03); }
+  100% { transform: translateY(0) scale(1); }
+}
+.sig-sh-dog { animation: sigShDog 2.6s cubic-bezier(.45,0,.3,1) both; }
+@keyframes sigShDog { 0%,12% { transform: translateX(-50%); } 45% { transform: translateX(30%) scale(.4); opacity: 0; } 55% { transform: translateX(-90%) scale(.6); opacity: .6; } 72%,100% { transform: translateX(-50%); opacity: 1; } }
+.fx-ball { position: absolute; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fca5a5, #dc2626 60%, #7f1d1d); box-shadow: inset -3px -4px 6px rgba(0,0,0,.3), 0 4px 8px rgba(0,0,0,.3); animation: fxBall 2.6s cubic-bezier(.45,0,.3,1) both; }
+@keyframes fxBall {
+  0% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+  10% { transform: translate(-50%, -30%) scale(1); }
+  30% { transform: translate(200%, -300%) scale(.7); opacity: 1; }
+  42% { transform: translate(300%, 0) scale(.5); opacity: 0; }
+  100% { opacity: 0; }
+}
+
+/* fox: huff-huff + chase own tail (spins) */
+.sig-fox { animation: sigFox 2.4s cubic-bezier(.4,0,.3,1) both; }
+@keyframes sigFox {
+  0% { transform: scale(1); }
+  8% { transform: scale(1.06,.94) translateY(0); }
+  14% { transform: scale(.98,1.03) translateY(-3%); }
+  20% { transform: scale(1.06,.94); }
+  26% { transform: scale(.98,1.03) translateY(-3%); }
+  34% { transform: scale(1) scaleX(1); }
+  46% { transform: scaleX(-1) translateX(6%) rotate(-6deg); }
+  58% { transform: scaleX(1) translateX(6%) rotate(6deg); }
+  70% { transform: scaleX(-1) translateX(-6%) rotate(-6deg); }
+  82% { transform: scaleX(1) translateX(-6%) rotate(6deg) translateY(-6%); }
+  92% { transform: scale(1.06,.94); }
+  100% { transform: scale(1); }
+}
+.sig-sh-fox { animation: sigShFox 2.4s ease-in-out both; }
+@keyframes sigShFox { 0%,34%,100% { transform: translateX(-50%) scale(1); } 58%,82% { transform: translateX(-50%) scale(1.25,1); } }
+.fx-puff { animation: fxPuff 1.2s ease-out infinite; opacity: 0; }
+@keyframes fxPuff { 0% { transform: scale(.4) translateX(0); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1.3) translateX(40%); opacity: 0; } }
+
+/* dragon: wing flap rise + fire breath */
+.sig-dragon { animation: sigDragon 2.4s cubic-bezier(.4,0,.3,1) both; }
+@keyframes sigDragon {
+  0% { transform: translateY(0) scale(1); }
+  10% { transform: translateY(0) scale(1.08,.9); }
+  22% { transform: translateY(-14%) scale(.95,1.06); }
+  32% { transform: translateY(-10%) scale(1.04,.97); }
+  42% { transform: translateY(-16%) scale(.96,1.05); }
+  52% { transform: translateY(-8%) rotate(-4deg) scale(1.06,.96); }
+  62%,78% { transform: translateY(-8%) rotate(-6deg) scale(1.08,.95) translateX(-2%); }
+  90% { transform: translateY(0) scale(1.05,.95); }
+  100% { transform: translateY(0) scale(1); }
+}
+.sig-sh-dragon { animation: sigShDragon 2.4s ease-in-out both; }
+@keyframes sigShDragon { 0%,100% { transform: translateX(-50%) scale(1); } 20%,80% { transform: translateX(-50%) scale(.65); opacity: .5; } }
+.fx-flame {
+  position: absolute; transform-origin: 0% 50%;
+  background: radial-gradient(ellipse at 0% 50%, #fff7ae 0%, #fde047 18%, #fb923c 42%, #ef4444 66%, rgba(239,68,68,0) 78%);
+  border-radius: 10% 60% 60% 10% / 40% 50% 50% 40%;
+  filter: blur(1.5px) drop-shadow(0 0 12px rgba(251,146,60,.9));
+  mix-blend-mode: screen;
+  animation: fxFlame 2.4s ease-out both;
+}
+@keyframes fxFlame {
+  0%,52% { transform: scale(0,.3); opacity: 0; }
+  58% { transform: scale(.6,.8); opacity: 1; }
+  64% { transform: scale(1.05,1.1); }
+  70% { transform: scale(.9,.95); }
+  76% { transform: scale(1.1,1.15); opacity: 1; }
+  88% { transform: scale(1.2,.6) translateX(10%); opacity: 0; }
+  100% { opacity: 0; }
+}
+.fx-ember { animation: fxEmber 1.1s ease-out infinite; animation-delay: 1.3s; opacity: 0; }
+@keyframes fxEmber { 0% { transform: translate(0,0) scale(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(60%, -120%) scale(.3); opacity: 0; } }
+
+/* bunny: super hop with pirouette */
+.sig-bunny { animation: sigBunny 2.2s cubic-bezier(.35,0,.3,1) both; }
+@keyframes sigBunny {
+  0% { transform: translateY(0) scale(1); }
+  8% { transform: scale(1.12,.84); }
+  26% { transform: translateY(-45%) scale(.9,1.12) rotateY(180deg); }
+  42% { transform: translateY(-50%) rotateY(360deg) scale(.95,1.05); }
+  56% { transform: translateY(0) scale(1.12,.86); }
+  64% { transform: translateY(-14%) scale(.95,1.05); }
+  74% { transform: translateY(0) scale(1.06,.94); }
+  82% { transform: translateY(-5%); }
+  100% { transform: translateY(0) scale(1); }
+}
+.sig-sh-bunny { animation: sigShBunny 2.2s ease-in-out both; }
+@keyframes sigShBunny { 0%,56%,74%,100% { transform: translateX(-50%) scale(1); } 34% { transform: translateX(-50%) scale(.35); opacity: .3; } 64% { transform: translateX(-50%) scale(.8); } }
+
+/* panda: cozy munch sway */
+.sig-panda { animation: sigPanda 3s ease-in-out both; transform-origin: 50% 90%; }
+@keyframes sigPanda {
+  0%,100% { transform: rotate(0) scale(1); }
+  10% { transform: rotate(0) scale(1.05,.95) translateY(2%); }
+  20%,40%,60%,80% { transform: rotate(-4deg) scale(1.03,.97); }
+  30%,50%,70% { transform: rotate(4deg) scale(1.03,.97); }
+  90% { transform: rotate(0) scale(1.04,.96); }
+}
+
+/* owl: head turns around (squash+flip) */
+.sig-owl { animation: sigOwl 2.6s cubic-bezier(.5,0,.3,1) both; transform-origin: 50% 60%; }
+@keyframes sigOwl {
+  0%,10% { transform: scaleX(1) rotate(0); }
+  22% { transform: scaleX(.7) rotate(-10deg); }
+  30% { transform: scaleX(-1) rotate(-4deg); }
+  46% { transform: scaleX(-1) rotate(-4deg); }
+  56% { transform: scaleX(.7) rotate(12deg); }
+  64% { transform: scaleX(1) rotate(18deg); }
+  76% { transform: scaleX(1) rotate(18deg); }
+  88% { transform: scaleX(1) rotate(-4deg); }
+  100% { transform: scaleX(1) rotate(0); }
+}
+
+/* bird: sing — puffs up, bobs, flutters */
+.sig-bird { animation: sigBird 2.6s ease-in-out both; }
+@keyframes sigBird {
+  0% { transform: scale(1) translateY(0); }
+  10% { transform: scale(1.1,.92); }
+  20% { transform: scale(1.08,1.02) translateY(-6%); }
+  30%,50%,70% { transform: scale(1.06,1) translateY(-4%) rotate(-5deg); }
+  40%,60%,80% { transform: scale(1.06,1) translateY(-8%) rotate(5deg); }
+  90% { transform: scale(1.04,.96); }
+  100% { transform: scale(1) translateY(0); }
+}
+.sig-sh-bird { animation: pmShHover 1.3s ease-in-out infinite; }
+.fx-note { animation: fxNote 1.8s ease-out infinite; opacity: 0; }
+@keyframes fxNote { 0% { transform: translate(0, 20%) scale(.4) rotate(-10deg); opacity: 0; } 25% { opacity: 1; transform: scale(1.1) rotate(8deg); } 100% { transform: translate(30%, -160%) scale(.8) rotate(-12deg); opacity: 0; } }
+
+/* cat: coding focus bob */
+.sig-cat { animation: sigCat 2.6s ease-in-out both; }
+@keyframes sigCat { 0%,100% { transform: rotate(0); } 20%,60% { transform: rotate(-2deg) translateY(1%); } 40%,80% { transform: rotate(2deg); } 90% { transform: translateY(-6%) scale(.97,1.04); } }
+
+@media (prefers-reduced-motion: reduce) {
+  [class*='sig-'], .pm-alive, .fx-flame, .fx-ball, .fx-note, .fx-puff, .fx-ember { animation: none !important; }
+}

@@ -18,7 +18,8 @@ export type PetAnim =
   | 'play'
   | 'study'
   | 'pet'
-  | 'beg';
+  | 'beg'
+  | 'special';
 
 export const CELL_W = 192;
 export const CELL_H = 208;
@@ -31,6 +32,8 @@ export interface SheetFrame {
   frames: number;
   fps: number;
   effect?: string;
+  cw?: number;
+  ch?: number;
 }
 
 const KODIK_MAIN = { src: u('/pets/kodik.webp'), cols: 8, rows: 9 };
@@ -52,23 +55,25 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   study: { ...KODIK_CARE, row: 3, frames: 4, fps: 4 },
   pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
+  special: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
 };
 
 function buildSheet(file: string): Record<PetAnim, SheetFrame> {
-  const base = { src: u(`/pets/${file}`), cols: 4, rows: 8 };
-  const idle = { ...base, row: 0, frames: 4, fps: 4 };
-  const wave = { ...base, row: 3, frames: 4, fps: 9 };
-  const eat = { ...base, row: 4, frames: 4, fps: 5 };
-  const sleep = { ...base, row: 5, frames: 4, fps: 3 };
-  const play = { ...base, row: 6, frames: 4, fps: 6 };
-  const study = { ...base, row: 7, frames: 4, fps: 4 };
+  const base = { src: u(`/pets/${file}`), cols: 1, rows: 10, frames: 1, fps: 1, cw: 288, ch: 312 };
+  const row = (r: number, effect?: string): SheetFrame => ({ ...base, row: r, effect });
+  const idle = row(0);
+  const wave = row(3);
+  const eat = row(4);
+  const sleep = row(5);
+  const play = row(6);
+  const study = row(7);
   return {
     idle,
-    'run-right': { ...base, row: 1, frames: 4, fps: 8 },
-    'run-left': { ...base, row: 2, frames: 4, fps: 8 },
+    'run-right': row(1),
+    'run-left': row(2),
     wave,
-    jump: play,
-    failed: { ...idle, fps: 2, effect: 'pet-sad' },
+    jump: row(9),
+    failed: row(0, 'pet-sad'),
     waiting: sleep,
     working: study,
     review: wave,
@@ -76,31 +81,32 @@ function buildSheet(file: string): Record<PetAnim, SheetFrame> {
     sleep,
     play,
     study,
-    pet: { ...idle, frames: 1, fps: 1 },
-    beg: idle,
+    pet: idle,
+    beg: wave,
+    special: row(8),
   };
 }
 
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   cat: KODIK,
-  dog: buildSheet('dog-sheet.webp'),
-  bird: buildSheet('bird-sheet.webp'),
-  fox: buildSheet('fox-sheet.webp'),
-  dragon: buildSheet('dragon-sheet.webp'),
-  bunny: buildSheet('bunny-sheet.webp'),
-  panda: buildSheet('panda-sheet.webp'),
-  owl: buildSheet('owl-sheet.webp'),
+  dog: buildSheet('dog-v2.webp'),
+  bird: buildSheet('bird-v2.webp'),
+  fox: buildSheet('fox-v2.webp'),
+  dragon: buildSheet('dragon-v2.webp'),
+  bunny: buildSheet('bunny-v2.webp'),
+  panda: buildSheet('panda-v2.webp'),
+  owl: buildSheet('owl-v2.webp'),
 };
 
 export const PET_ICONS: Record<PetType, string> = {
   cat: u('/pets/kodik-icon.png'),
-  dog: u('/pets/dog.webp'),
-  bird: u('/pets/bird.webp'),
-  fox: u('/pets/fox.webp'),
-  dragon: u('/pets/dragon.webp'),
-  bunny: u('/pets/bunny.webp'),
-  panda: u('/pets/panda.webp'),
-  owl: u('/pets/owl.webp'),
+  dog: u('/pets/dog-icon-v2.webp'),
+  bird: u('/pets/bird-icon-v2.webp'),
+  fox: u('/pets/fox-icon-v2.webp'),
+  dragon: u('/pets/dragon-icon-v2.webp'),
+  bunny: u('/pets/bunny-icon-v2.webp'),
+  panda: u('/pets/panda-icon-v2.webp'),
+  owl: u('/pets/owl-icon-v2.webp'),
 };
 
 export type ActionType = 'feed' | 'play' | 'train' | 'sleep' | 'heal' | null;

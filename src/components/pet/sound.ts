@@ -238,6 +238,47 @@ export const sfx = {
   },
 };
 
+export function signatureSfx(type: string) {
+  const c = ac();
+  if (!c || !throttle('sig', 800)) return;
+  switch (type) {
+    case 'dog':
+      tone(c, { freq: 500, to: 800, dur: 0.1, type: 'square', vol: 0.08 });
+      tone(c, { freq: 700, to: 1000, start: 0.12, dur: 0.1, type: 'square', vol: 0.08 });
+      [0.3, 0.55, 0.75].forEach((st) => tone(c, { freq: 180, to: 90, start: st, dur: 0.08, type: 'sine', vol: 0.25 }));
+      tone(c, { freq: 700, to: 1200, start: 1.9, dur: 0.18, type: 'triangle', vol: 0.18 });
+      break;
+    case 'fox':
+      [0, 0.24].forEach((st) => noise(c, { start: st, dur: 0.14, vol: 0.28, freq: 1400, q: 1.5 }));
+      tone(c, { freq: 400, to: 1400, start: 0.8, dur: 0.9, type: 'triangle', vol: 0.08 });
+      break;
+    case 'dragon':
+      [0, 0.28, 0.56].forEach((st) => noise(c, { start: st, dur: 0.16, vol: 0.18, freq: 500, q: 0.8, type: 'lowpass' }));
+      tone(c, { freq: 140, to: 70, start: 1.2, dur: 0.7, type: 'sawtooth', vol: 0.08 });
+      noise(c, { start: 1.25, dur: 0.8, vol: 0.35, freq: 900, q: 0.5 });
+      break;
+    case 'bunny':
+      tone(c, { freq: 300, to: 1400, dur: 0.35, type: 'sine', vol: 0.2 });
+      tone(c, { freq: 1400, to: 500, start: 0.45, dur: 0.3, type: 'sine', vol: 0.15 });
+      tone(c, { freq: 600, to: 900, start: 1.4, dur: 0.1, type: 'triangle', vol: 0.12 });
+      break;
+    case 'panda':
+      for (let i = 0; i < 6; i++) noise(c, { start: i * 0.35, dur: 0.08, vol: 0.28, freq: 2400, q: 3 });
+      break;
+    case 'owl':
+      tone(c, { freq: 420, to: 380, dur: 0.28, type: 'sine', vol: 0.3, attack: 0.05 });
+      tone(c, { freq: 420, to: 360, start: 0.4, dur: 0.45, type: 'sine', vol: 0.3, attack: 0.05 });
+      break;
+    case 'bird': {
+      const notes = [1568, 1760, 2093, 1760, 2349, 2093, 2637, 2349];
+      notes.forEach((f, i) => tone(c, { freq: f, to: f * 1.08, start: i * 0.13, dur: 0.11, type: 'sine', vol: 0.12 }));
+      break;
+    }
+    default:
+      [880, 1100, 1320].forEach((f, i) => tone(c, { freq: f, start: i * 0.12, dur: 0.06, type: 'square', vol: 0.05 }));
+  }
+}
+
 export const ACTION_SFX: Record<string, () => void> = {
   eat: sfx.eat,
   play: sfx.play,

@@ -7,7 +7,8 @@ import { getPipApi, openPipWindow, PipPortal } from './PipWindow';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { PetActionPill, PillButton } from './PetActionPill';
 import { wantsCuddleNow } from './useCuddle';
-import { sfx, ACTION_SFX } from './sound';
+import { sfx, ACTION_SFX, signatureSfx } from './sound';
+import { SIGNATURES, pickBubble } from './signature';
 
 const SIZE = 120;
 const SPEED = 90;
@@ -148,6 +149,11 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         setBubble('Иду к тебе!');
         return;
       }
+      if (now - lastActivity.current > 12000 && !tiredRef.current && Math.random() < 0.18) {
+        lastActivity.current = now;
+        doSignature.current();
+        return;
+      }
       if (now - lastActivity.current > 15000 && Math.random() < 0.3) {
         const n = needRef.current;
         const pool = (Object.keys(ACTIVITIES) as Activity[]).filter(
@@ -195,6 +201,13 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  const doSignature = useRef<() => void>(() => {});
+  doSignature.current = () => {
+    const t = usePetStore.getState().type;
+    playOnce('special', SIGNATURES[t].duration, pickBubble(t));
+    signatureSfx(t);
+  };
 
   const stopActivity = () => {
     clearTimeout(activityTimer.current);
@@ -363,6 +376,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
                 {canPip && (
                   <PillButton title="Открыть поверх всех окон" icon="PictureInPicture2" onClick={onOpenPip} />
                 )}
+                <PillButton title={SIGNATURES[type].label} icon={SIGNATURES[type].icon} onClick={() => doSignature.current()} />
                 <PillButton title="Спрятать" icon="EyeOff" onClick={onHide} />
               </>
             }

@@ -70,6 +70,8 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
       return { motion: 'pm-pet', shadow: 'pm-sh-pet' };
     case 'beg':
       return { motion: 'pm-beg', shadow: 'pm-sh-beg' };
+    case 'special':
+      return { motion: `sig-${type}`, shadow: `sig-sh-${type}` };
     default:
       return { motion: '', shadow: '' };
   }
@@ -117,7 +119,11 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
   }, [anim, type]);
 
   const frame = seq[step % seq.length] ?? 0;
-  const w = CELL_W * (size / CELL_H);
+  const cw = cfg.cw ?? CELL_W;
+  const ch = cfg.ch ?? CELL_H;
+  const w = cw * (size / ch);
+  const staticFrame = cfg.frames === 1;
+  const isV2 = type !== 'cat';
   const { motion, shadow: shadowCls } = motionFor(type, anim);
   const isFlyer = FLYERS.includes(type);
   const delay = anim === 'idle' ? `${phase}s` : undefined;
@@ -141,7 +147,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
             <div
               role="img"
               aria-label="Питомец"
-              className={cfg.effect}
+              className={`${cfg.effect ?? ''} ${staticFrame ? `pm-alive pm-alive-${anim}` : ''} ${isV2 ? 'pm-v2' : ''}`}
               style={{
                 width: w,
                 height: size,
@@ -154,7 +160,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
           </div>
         </div>
       </div>
-      <PetFx anim={anim} size={size} />
+      <PetFx anim={anim} size={size} type={type} />
     </div>
   );
 }

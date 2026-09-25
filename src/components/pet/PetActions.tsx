@@ -1,15 +1,18 @@
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
 import { ACTION_SFX } from './sound';
+import { SIGNATURES } from './signature';
 
 type ActionType = 'feed' | 'play' | 'train' | 'sleep' | 'heal' | null;
 
 interface PetActionsProps {
   onAction: (action: ActionType) => void;
+  onSignature?: () => void;
 }
 
-export function PetActions({ onAction }: PetActionsProps) {
-  const { feed, play, train, sleep, heal, energy, hunger } = usePetStore();
+export function PetActions({ onAction, onSignature }: PetActionsProps) {
+  const { feed, play, train, sleep, heal, energy, hunger, type } = usePetStore();
+  const sig = SIGNATURES[type];
 
   const actions = [
     { id: 'feed' as const, label: 'Покормить', icon: 'Drumstick', gain: '+25 сытость', cost: '−5 энергии', disabled: energy < 5, grad: 'from-orange-400 to-amber-500', glow: 'rgba(251,146,60,0.55)', fn: feed },
@@ -21,6 +24,22 @@ export function PetActions({ onAction }: PetActionsProps) {
 
   return (
     <div className="space-y-3">
+      {onSignature && (
+        <button onClick={onSignature} className="pa-tile group flex w-full items-center gap-4 p-4 text-left">
+          <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/20 via-violet-500/10 to-transparent opacity-70 transition-opacity group-hover:opacity-100" />
+          <div className="pa-icon-chip relative h-12 w-12 shrink-0 bg-gradient-to-br from-fuchsia-500 to-violet-600 text-white" style={{ ['--chip-glow' as string]: 'rgba(217,70,239,0.6)' }}>
+            <Icon name={sig.icon} size={22} />
+          </div>
+          <div className="relative flex-1">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-white">{sig.label}</span>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-fuchsia-200">Фирменный трюк</span>
+            </div>
+            <div className="text-xs text-white/55">{sig.hint}</div>
+          </div>
+          <Icon name="Sparkles" size={18} className="relative text-fuchsia-300 transition-transform group-hover:rotate-12" />
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {actions.map((a) => (
           <button

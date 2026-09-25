@@ -13,7 +13,8 @@ import { PetActions } from './PetActions';
 import { PetStats } from './PetStats';
 import { PetChat } from './PetChat';
 import { PetHeader } from './PetHeader';
-import { sfx } from './sound';
+import { sfx, signatureSfx } from './sound';
+import { SIGNATURES, pickBubble } from './signature';
 import { MiniGames } from './MiniGames';
 import { Achievements } from './Achievements';
 import Icon from '@/components/ui/icon';
@@ -38,6 +39,8 @@ export function GameScreen() {
   const { hasSelectedPet, hunger, happiness, energy, health, tick, type, level, stage, intelligence } = usePetStore();
   const [activeTab, setActiveTab] = useState<Tab>('actions');
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
+  const [sigBubble, setSigBubble] = useState<string | null>(null);
+  const [sigKey, setSigKey] = useState(0);
   const need = usePetNeed();
   usePetNotifications();
   const petting = usePetting();
@@ -72,7 +75,16 @@ export function GameScreen() {
   }
 
   const mood = getMood(hunger, happiness, energy, health);
-  const anim: PetAnim = currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
+  const doSignature = () => {
+    if (sigBubble) return;
+    setCurrentAction(null);
+    setSigKey((k) => k + 1);
+    setSigBubble(pickBubble(type));
+    signatureSfx(type);
+    setTimeout(() => setSigBubble(null), SIGNATURES[type].duration);
+  };
+
+  const anim: PetAnim = sigBubble ? 'special' : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
 
@@ -123,11 +135,19 @@ export function GameScreen() {
 
             <div className="absolute inset-x-0 bottom-[9%] z-10 flex justify-center">
               <div className="relative">
-                {!currentAction && !petting.petting && !petting.bubble && !wantsCuddle && <PetEmotion need={need} />}
-                {!currentAction && !petting.petting && !petting.bubble && wantsCuddle && (
+                {!sigBubble && !currentAction && !petting.petting && !petting.bubble && !wantsCuddle && <PetEmotion need={need} />}
+                {!sigBubble && !currentAction && !petting.petting && !petting.bubble && wantsCuddle && (
                   <div className="pointer-events-none absolute -top-4 left-1/2 z-20 -translate-x-1/2 pa-pop">
                     <div className="relative whitespace-nowrap rounded-2xl bg-white px-3.5 py-1.5 text-sm font-extrabold text-pink-600 ring-2 ring-pink-300/60 shadow-[0_10px_30px_-10px_rgba(236,72,153,0.8)]">
                       Я соскучился… погладь меня!
+                      <span className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
+                    </div>
+                  </div>
+                )}
+                {sigBubble && !petting.bubble && (
+                  <div key={sigBubble + sigKey} className="pointer-events-none absolute -top-4 left-1/2 z-20 -translate-x-1/2 pa-pop">
+                    <div className="relative whitespace-nowrap rounded-2xl bg-white px-3.5 py-1.5 text-sm font-extrabold text-violet-700 shadow-[0_10px_30px_-10px_rgba(139,92,246,0.8)]">
+                      {sigBubble}
                       <span className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 bg-white" />
                     </div>
                   </div>
@@ -145,7 +165,7 @@ export function GameScreen() {
                   className="relative cursor-grab touch-none select-none active:cursor-grabbing"
                   title="Погладь меня!"
                 >
-                  <PetSprite type={type} anim={anim} size={spriteSize} />
+                  <PetSprite key={anim === 'special' ? `sig${sigKey}` : 'main'} type={type} anim={anim} size={spriteSize} />
                   {petting.hearts.map((h) => (
                     <span
                       key={h.id}
@@ -199,7 +219,7 @@ export function GameScreen() {
           </div>
 
           <div key={activeTab} className="pa-rise">
-            {activeTab === 'actions' && <PetActions onAction={setCurrentAction} />}
+            {activeTab === 'actions' && <PetActions onAction={setCurrentAction} onSignature={doSignature} />}
             {activeTab === 'games' && <MiniGames />}
             {activeTab === 'chat' && <PetChat />}
           </div>
