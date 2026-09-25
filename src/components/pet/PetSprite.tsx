@@ -122,8 +122,6 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
   const cw = cfg.cw ?? CELL_W;
   const ch = cfg.ch ?? CELL_H;
   const w = cw * (size / ch);
-  const staticFrame = cfg.frames === 1;
-  const isV2 = type !== 'cat';
   const { motion, shadow: shadowCls } = motionFor(type, anim);
   const isFlyer = FLYERS.includes(type);
   const delay = anim === 'idle' ? `${phase}s` : undefined;
@@ -147,7 +145,7 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
             <div
               role="img"
               aria-label="Питомец"
-              className={`${cfg.effect ?? ''} ${staticFrame ? `pm-alive pm-alive-${anim}` : ''} ${isV2 ? 'pm-v2' : ''}`}
+              className={cfg.effect}
               style={{
                 width: w,
                 height: size,
