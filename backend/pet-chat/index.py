@@ -113,9 +113,13 @@ def handler(event: dict, context) -> dict:
         return respond(400, {'error': 'Пустое сообщение'})
 
     iq = float(pet.get('intelligence', 10))
-    max_tokens = 250 if iq < 25 else 450 if iq < 50 else 800 if iq < 75 else 1200
+    brief = bool(data.get('brief'))
+    max_tokens = 220 if brief else 250 if iq < 25 else 450 if iq < 50 else 800 if iq < 75 else 1200
 
-    messages = [{'role': 'system', 'content': build_system(pet)}]
+    system = build_system(pet)
+    if brief:
+        system += '\nВАЖНО: ответь максимально сжато — не больше 5–6 коротких строк, только самое главное.'
+    messages = [{'role': 'system', 'content': system}]
     for m in history[-12:]:
         role = 'assistant' if m.get('role') == 'pet' else 'user'
         text = str(m.get('text') or '')[:2000]
@@ -137,7 +141,7 @@ def handler(event: dict, context) -> dict:
         method='POST',
     )
     try:
-        with urllib.request.urlopen(req, timeout=28) as resp:
+        with urllib.request.urlopen(req, timeout=4.3 if brief else 28) as resp:
             result = json.loads(resp.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         detail = e.read().decode('utf-8', 'ignore')[:300]

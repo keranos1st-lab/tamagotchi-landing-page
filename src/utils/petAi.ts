@@ -7,10 +7,23 @@ export type AiResult = { ok: true; reply: string } | { ok: false; error: string 
 
 const URL = (func2url as Record<string, string>)['pet-chat'];
 
+type PetCtx = Parameters<typeof request>[0];
+
 export async function askPet(
-  pet: Pick<PetState, 'name' | 'type' | 'intelligence' | 'level' | 'hunger' | 'happiness' | 'energy' | 'health' | 'chatHistory'>,
+  pet: PetCtx,
   message: string,
   opts: { selection?: string; action?: SelectionAction } = {},
+): Promise<AiResult> {
+  const full = await request(pet, message, opts, false);
+  if (full.ok || full.error === 'no_key' || full.error === 'no_balance' || full.error === 'bad_key') return full;
+  return request(pet, message, opts, true);
+}
+
+async function request(
+  pet: Pick<PetState, 'name' | 'type' | 'intelligence' | 'level' | 'hunger' | 'happiness' | 'energy' | 'health' | 'chatHistory'>,
+  message: string,
+  opts: { selection?: string; action?: SelectionAction },
+  brief: boolean,
 ): Promise<AiResult> {
   try {
     const res = await fetch(URL, {
@@ -20,6 +33,7 @@ export async function askPet(
         message,
         selection: opts.selection,
         action: opts.action,
+        brief,
         history: pet.chatHistory.slice(-13, -1).map((m) => ({ role: m.role, text: m.text })),
         pet: {
           name: pet.name,
