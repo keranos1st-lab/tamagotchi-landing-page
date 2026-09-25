@@ -42,7 +42,7 @@ const STARS = Array.from({ length: 18 }).map((_, i) => ({
 }));
 
 export function GameScreen() {
-  const { hasSelectedPet, hunger, happiness, energy, health, tick, type, level, stage, intelligence } = usePetStore();
+  const { hasSelectedPet, hunger, happiness, energy, health, type, level, stage, intelligence } = usePetStore();
   useAchievementWatcher();
   const [activeTab, setActiveTab] = useState<Tab>('actions');
   const [currentAction, setCurrentAction] = useState<ActionType>(null);
@@ -54,19 +54,18 @@ export function GameScreen() {
   const wantsCuddle = useWantsCuddle();
 
   useEffect(() => {
-    const catchUp = usePetStore.getState().catchUp;
-    catchUp();
-    const onVisible = () => document.visibilityState === 'visible' && catchUp();
+    const advance = () => usePetStore.getState().advance();
+    advance();
+    const interval = setInterval(advance, 5000);
+    const onVisible = () => document.visibilityState === 'visible' && advance();
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', advance);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', advance);
+    };
   }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      tick();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [tick]);
 
   useEffect(() => {
     if (currentAction) {
@@ -76,6 +75,16 @@ export function GameScreen() {
       return () => clearTimeout(timer);
     }
   }, [currentAction]);
+
+  const thinking = useThinkingStore((s) => s.thinking);
+  const celebrate = useThinkingStore((s) => s.celebrate);
+  const [cheering, setCheering] = useState(false);
+  useEffect(() => {
+    if (!celebrate) return;
+    setCheering(true);
+    const t = setTimeout(() => setCheering(false), 1600);
+    return () => clearTimeout(t);
+  }, [celebrate]);
 
   if (!hasSelectedPet) {
     return <PetSelection />;
@@ -92,8 +101,7 @@ export function GameScreen() {
     setTimeout(() => setSigBubble(null), signatureDuration(type));
   };
 
-  const thinking = useThinkingStore((s) => s.thinking);
-  const anim: PetAnim = sigBubble ? 'special' : thinking ? thinkingAnim(type) : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
+  const anim: PetAnim = sigBubble ? 'special' : thinking ? (need === 'tired' ? 'sleep' : thinkingAnim(type)) : cheering ? (need === 'tired' || need === 'sick' ? 'wave' : 'jump') : currentAction ? ACTION_ANIM[currentAction] : petting.petting ? 'pet' : wantsCuddle ? 'beg' : needAnim(need) ?? 'idle';
   const spriteSize = stage === 'adult' ? 300 : stage === 'teen' ? 270 : 240;
   const stageLabel = stage === 'adult' ? 'Взрослый' : stage === 'teen' ? 'Подросток' : 'Малыш';
 

@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
 import { track } from '@/store/achievementStore';
+import { rewardLabel, chaseReward } from './gameLogic';
 
 const DURATION = 30;
 const PET = 70;
@@ -16,7 +17,8 @@ type Phase = 'intro' | 'play' | 'done';
 
 export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const type = usePetStore((s) => s.type);
-  const { gainExp, play: playStat } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [timeLeft, setTimeLeft] = useState(DURATION);
@@ -33,7 +35,6 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const catchesRef = useRef(0);
   const rewarded = useRef(false);
 
-  const reward = Math.min(60, catches * 6 + 5);
 
   useEffect(() => {
     if (phase !== 'play') return;
@@ -103,14 +104,14 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     if (phase === 'done' && !rewarded.current) {
       rewarded.current = true;
-      if (catchesRef.current > 0) sfx.win();
+      const c = catchesRef.current;
+      if (c <= 2) sfx.win();
       else sfx.lose();
-      gainExp(reward);
-      playStat();
+      setGained(playedGame('chase', chaseReward(c)));
       track.game('chase');
-      if (catchesRef.current === 0) track.win();
+      if (c === 0) track.win();
     }
-  }, [phase, gainExp, playStat, reward]);
+  }, [phase, playedGame]);
 
   const updateMouse = (clientX: number, clientY: number) => {
     const r = field.current?.getBoundingClientRect();
@@ -121,6 +122,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const start = () => {
     catchesRef.current = 0;
     rewarded.current = false;
+    setGained(null);
     setCatches(0);
     setTimeLeft(DURATION);
     const el = field.current;
@@ -134,13 +136,13 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
 
   if (phase === 'done') {
     const verdict =
-      catches === 0 ? 'Ты неуловим! Питомец не смог тебя поймать' : catches < 5 ? 'Хорошо бегаешь!' : 'Питомец — настоящий охотник!';
+      catches === 0 ? 'Ты неуловим! Питомец не смог тебя поймать' : catches <= 3 ? 'Хорошо бегаешь!' : 'Питомец оказался быстрее — попробуй ещё';
     return (
       <GameResult
-        pet={<PetSprite type={type} anim={catches > 0 ? 'play' : 'failed'} size={110} />}
-        title={`Поймал ${catches} раз`}
+        pet={<PetSprite type={type} anim={catches > 3 ? 'play' : 'failed'} size={110} />}
+        title={catches === 0 ? 'Ни разу не пойман!' : `Пойман ${catches} раз`}
         subtitle={verdict}
-        reward={`+${reward} опыта`}
+        reward={rewardLabel(gained)}
         onAgain={start}
         onExit={onComplete}
       />
@@ -198,7 +200,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#07061a]/70 backdrop-blur-sm text-center p-4">
             <p className="font-display text-2xl font-bold text-white mb-2">Готов бежать?</p>
             <p className="text-white/60 text-sm mb-5 max-w-xs">
-              Питомец гоняется за курсором 30 секунд. С каждой поимкой он бегает быстрее. Чем больше поймает — тем больше опыта!
+              Питомец 30 секунд гоняется за курсором и с каждой поимкой бегает быстрее. Чем реже он тебя поймает — тем больше опыта!
             </p>
             <button onClick={start} className="btn-neon pa-shine">
               <Icon name="Play" size={16} />

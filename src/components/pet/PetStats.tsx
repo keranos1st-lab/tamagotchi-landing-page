@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { fetchAiStatus, type AiStatus } from '@/utils/petAi';
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
 import { Panel, PanelTitle } from './ui';
@@ -90,24 +92,57 @@ export function PetStats() {
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">Возраст</div>
             <div className="text-sm font-extrabold text-white tabular-nums">
-              {Math.floor(age / 60)}ч {age % 60}м
+              {formatAge(age)}
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-2.5 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.07] p-3">
-        <span className="relative flex h-2.5 w-2.5">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-        </span>
-        <div className="text-xs leading-snug">
-          <div className="font-bold text-emerald-200">AI-агент активен</div>
-          <div className="text-white/50">
-            {intelligence < 25 ? 'Малыш: короткие ответы — обучай питомца' : intelligence < 50 ? 'Ученик: понятные советы' : intelligence < 75 ? 'Знаток: подробные ответы' : 'Эксперт: глубокие ответы с примерами'}
-          </div>
-        </div>
-      </div>
+      <AiStatusBadge />
     </Panel>
+  );
+}
+
+function formatAge(min: number) {
+  const d = Math.floor(min / 1440);
+  const h = Math.floor((min % 1440) / 60);
+  const m = min % 60;
+  return d > 0 ? `${d}д ${h}ч` : `${h}ч ${m}м`;
+}
+
+function AiStatusBadge() {
+  const [st, setSt] = useState<AiStatus | null | undefined>(undefined);
+  useEffect(() => {
+    fetchAiStatus().then(setSt);
+  }, []);
+  const ok = st?.configured && st.budgetOk !== false;
+  const tone = st === undefined ? 'white' : ok ? 'emerald' : st === null ? 'amber' : 'rose';
+  const title = st === undefined ? 'Проверяю AI…' : ok ? 'AI-помощник подключён' : st === null ? 'AI: нет связи с сервером' : !st.configured ? 'AI не настроен' : 'Дневной бюджет AI исчерпан';
+  const sub =
+    ok && st?.remainingToday !== undefined
+      ? `Осталось сегодня: ${st.remainingToday} из ${st.limits?.perDay} сообщений`
+      : st?.configured === false
+        ? 'Нужен секрет POLZA_AI_API_KEY'
+        : st === null
+          ? 'Проверь подключение к интернету'
+          : '';
+  const cls: Record<string, string> = {
+    white: 'border-white/10 bg-white/[0.04] text-white/60',
+    emerald: 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-200',
+    amber: 'border-amber-400/20 bg-amber-400/[0.07] text-amber-200',
+    rose: 'border-rose-400/25 bg-rose-500/[0.08] text-rose-200',
+  };
+  const dot: Record<string, string> = { white: 'bg-white/40', emerald: 'bg-emerald-400', amber: 'bg-amber-400', rose: 'bg-rose-400' };
+  return (
+    <div className={`mt-3 flex items-center gap-2.5 rounded-2xl border p-3 ${cls[tone]}`}>
+      <span className="relative flex h-2.5 w-2.5">
+        {ok && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
+        <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dot[tone]}`} />
+      </span>
+      <div className="text-xs leading-snug">
+        <div className="font-bold">{title}</div>
+        {sub && <div className="text-white/50">{sub}</div>}
+      </div>
+    </div>
   );
 }

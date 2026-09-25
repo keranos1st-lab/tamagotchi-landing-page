@@ -8,6 +8,8 @@ import { track } from '@/store/achievementStore';
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
+import { nextSnakeStep, placeFood, OPP, rewardLabel, type Cell, type Dir } from './gameLogic';
+
 
 function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
   const type = usePetStore((s) => s.type);
@@ -20,10 +22,10 @@ const GAMES: { id: MiniGame; icon: string; name: string; desc: string; reward: s
   { id: 'chase', icon: 'Footprints', name: 'Догонялки', desc: 'Убегай курсором от питомца', reward: 'до +60 XP', grad: 'from-pink-500 to-fuchsia-600', glow: 'rgba(236,72,153,0.55)', tag: 'Новое' },
   { id: 'catch', icon: 'Drumstick', name: 'Ловля еды', desc: 'Лови вкусное, мимо мусора', reward: 'до +50 XP', grad: 'from-orange-400 to-amber-500', glow: 'rgba(251,146,60,0.55)' },
   { id: 'memory', icon: 'Layers', name: 'Мемори', desc: 'Найди пары питомцев', reward: 'до +50 XP', grad: 'from-sky-400 to-blue-600', glow: 'rgba(56,189,248,0.55)' },
-  { id: 'quiz', icon: 'Brain', name: 'Викторина', desc: 'Проверь знания', reward: '+IQ', grad: 'from-violet-500 to-purple-700', glow: 'rgba(139,92,246,0.55)' },
-  { id: 'snake', icon: 'Route', name: 'Змейка', desc: 'Питомец собирает хвост', reward: '+XP за яблоко', grad: 'from-emerald-400 to-green-600', glow: 'rgba(52,211,153,0.55)' },
-  { id: 'tictactoe', icon: 'Grid3x3', name: 'Крестики-нолики', desc: 'Обыграй питомца', reward: '+20 XP', grad: 'from-rose-500 to-red-600', glow: 'rgba(244,63,94,0.55)' },
-  { id: 'reaction', icon: 'Zap', name: 'Реакция', desc: 'Кто быстрее?', reward: '+15 XP', grad: 'from-yellow-300 to-orange-500', glow: 'rgba(250,204,21,0.55)' },
+  { id: 'quiz', icon: 'Brain', name: 'Викторина', desc: 'Проверь знания', reward: 'до +40 XP', grad: 'from-violet-500 to-purple-700', glow: 'rgba(139,92,246,0.55)' },
+  { id: 'snake', icon: 'Route', name: 'Змейка', desc: 'Питомец собирает хвост', reward: 'до +50 XP', grad: 'from-emerald-400 to-green-600', glow: 'rgba(52,211,153,0.55)' },
+  { id: 'tictactoe', icon: 'Grid3x3', name: 'Крестики-нолики', desc: 'Обыграй питомца', reward: 'до +20 XP', grad: 'from-rose-500 to-red-600', glow: 'rgba(244,63,94,0.55)' },
+  { id: 'reaction', icon: 'Zap', name: 'Реакция', desc: 'Кто быстрее?', reward: 'до +40 XP', grad: 'from-yellow-300 to-orange-500', glow: 'rgba(250,204,21,0.55)' },
 ];
 
 export function MiniGames() {
@@ -119,7 +121,8 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
   const [timeLeft, setTimeLeft] = useState(30);
   const [items, setItems] = useState<Array<{ id: number; x: number; y: number; type: 'good' | 'bad'; emoji: string }>>([]);
   const [gameOver, setGameOver] = useState(false);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
   const nextId = useRef(0);
   const [petAnim, setPetAnim] = useState<PetAnim>('idle');
   const animTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -196,7 +199,7 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     if (gameOver) {
       sfx.win();
-      gainExp(Math.floor(score / 2));
+      setGained(playedGame('catch', Math.min(50, Math.floor(score / 3))));
       track.game('catch');
       track.best('catchBest', score);
       if (score >= 100) track.win();
@@ -231,7 +234,7 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
           pet={<MyPet anim="play" size={110} />}
           title={`${score} очков`}
           subtitle={score >= 150 ? 'Вот это реакция!' : 'Неплохо! Попробуй побить рекорд'}
-          reward={`+${Math.floor(score / 2)} опыта`}
+          reward={rewardLabel(gained)}
           onExit={onComplete}
         />
       )}
@@ -246,7 +249,9 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
   const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [gameWon, setGameWon] = useState(false);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
+  const movesRef = useRef(0);
 
   useEffect(() => {
     const shuffled = [...emojis, ...emojis]
@@ -267,7 +272,8 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
     setFlippedCards(newFlipped);
 
     if (newFlipped.length === 2) {
-      setMoves(m => m + 1);
+      movesRef.current += 1;
+      setMoves(movesRef.current);
       const [first, second] = newFlipped;
       
       if (cards[first].emoji === cards[second].emoji) {
@@ -282,7 +288,7 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
           if (matched.every(c => c.matched)) {
             setGameWon(true);
             sfx.win();
-            gainExp(Math.max(10, 50 - moves * 2));
+            setGained(playedGame('memory', Math.max(10, 50 - Math.max(0, movesRef.current - 8) * 2)));
             track.game('memory');
             track.win();
           }
@@ -331,7 +337,7 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
           pet={<MyPet anim="play" size={110} />}
           title="Все пары найдены!"
           subtitle={`За ${moves} ходов`}
-          reward={`+${Math.max(10, 50 - moves * 2)} опыта`}
+          reward={rewardLabel(gained)}
           onExit={onComplete}
         />
       )}
@@ -355,17 +361,18 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
   const [currentQ, setCurrentQ] = useState(0);
   const [score, setScore] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
-  const [showResult, setShowResult] = useState(false);
   const [gameOver, setGameOver] = useState(false);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
+  const scoreRef = useRef(0);
 
   const handleAnswer = (index: number) => {
     if (selected !== null) return;
     setSelected(index);
-    setShowResult(true);
 
     if (index === questions[currentQ].correct) {
-      setScore(s => s + 1);
+      scoreRef.current += 1;
+      setScore(scoreRef.current);
       sfx.good();
     } else {
       sfx.bad();
@@ -374,9 +381,9 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
     setTimeout(() => {
       if (currentQ + 1 >= questions.length) {
         setGameOver(true);
-        gainExp(score * 5 + (index === questions[currentQ].correct ? 5 : 0));
         {
-          const final = score + (index === questions[currentQ].correct ? 1 : 0);
+          const final = scoreRef.current;
+          setGained(playedGame('quiz', final * 5));
           track.game('quiz');
           if (final === questions.length) {
             track.bump('quizPerfect');
@@ -386,7 +393,6 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
       } else {
         setCurrentQ(q => q + 1);
         setSelected(null);
-        setShowResult(false);
       }
     }, 1500);
   };
@@ -436,7 +442,7 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
           pet={<MyPet anim="study" size={110} />}
           title={`${score} из ${questions.length}`}
           subtitle={score === questions.length ? 'Идеально! Настоящий гений' : 'Питомец стал немного умнее'}
-          reward={`+${score * 5} опыта`}
+          reward={rewardLabel(gained)}
           onExit={onComplete}
         />
       )}
@@ -446,92 +452,75 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
 
 // ========== ИГРА 4: ЗМЕЙКА ==========
 function SnakeGame({ onComplete }: { onComplete: () => void }) {
-  const [snake, setSnake] = useState<Array<{ x: number; y: number }>>([{ x: 5, y: 5 }]);
-  const [food, setFood] = useState({ x: 10, y: 10 });
-  const [direction, setDirection] = useState<'UP' | 'DOWN' | 'LEFT' | 'RIGHT'>('RIGHT');
+  const [snake, setSnake] = useState<Cell[]>([{ x: 5, y: 5 }]);
+  const [food, setFood] = useState<Cell>({ x: 10, y: 10 });
   const [gameOver, setGameOver] = useState(false);
   const [score, setScore] = useState(0);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
   const gameRef = useRef<HTMLDivElement>(null);
+  const st = useRef({ snake: [{ x: 5, y: 5 }] as Cell[], food: { x: 10, y: 10 } as Cell, dir: 'RIGHT' as Dir, queue: [] as Dir[], score: 0, over: false });
+
+  const turn = (d: Dir) => {
+    const g = st.current;
+    const last = g.queue.length ? g.queue[g.queue.length - 1] : g.dir;
+    if (d === last || d === OPP[last] || g.queue.length >= 2) return;
+    g.queue.push(d);
+  };
 
   useEffect(() => {
-    if (gameOver) return;
-
-    const interval = setInterval(() => {
-      setSnake(prev => {
-        const head = { ...prev[0] };
-        
-        switch (direction) {
-          case 'UP': head.y -= 1; break;
-          case 'DOWN': head.y += 1; break;
-          case 'LEFT': head.x -= 1; break;
-          case 'RIGHT': head.x += 1; break;
-        }
-
-        // Check wall collision
-        if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) {
-          sfx.lose();
+    const id = setInterval(() => {
+      const g = st.current;
+      if (g.over) return;
+      if (g.queue.length) g.dir = g.queue.shift()!;
+      const r = nextSnakeStep(g.snake, g.dir, g.food);
+      if (r.dead) {
+        g.over = true;
+        sfx.lose();
+        setGameOver(true);
+        return;
+      }
+      g.snake = r.snake;
+      if (r.ate) {
+        g.score += 10;
+        sfx.eat();
+        const f = placeFood(g.snake);
+        if (!f) {
+          g.over = true;
           setGameOver(true);
-          return prev;
-        }
-
-        // Check self collision
-        if (prev.some(segment => segment.x === head.x && segment.y === head.y)) {
-          sfx.lose();
-          setGameOver(true);
-          return prev;
-        }
-
-        const newSnake = [head, ...prev];
-
-        // Check food
-        if (head.x === food.x && head.y === food.y) {
-          setScore(s => s + 10);
-          sfx.eat();
-          setFood({
-            x: Math.floor(Math.random() * 20),
-            y: Math.floor(Math.random() * 20),
-          });
-        } else {
-          newSnake.pop();
-        }
-
-        return newSnake;
-      });
+        } else g.food = f;
+        setScore(g.score);
+        setFood(g.food);
+      }
+      setSnake(g.snake);
     }, 150);
-
-    return () => clearInterval(interval);
-  }, [direction, food, gameOver]);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (gameOver) {
-      gainExp(Math.floor(score / 2));
+      const apples = st.current.score / 10;
+      setGained(playedGame('snake', Math.min(50, apples * 4)));
       track.game('snake');
-      track.best('snakeBest', Math.round(score / 10));
-      if (score >= 100) track.win();
+      track.best('snakeBest', apples);
+      if (apples >= 10) track.win();
     }
-  }, [gameOver]);
+  }, [gameOver, playedGame]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      switch (e.key) {
-        case 'ArrowUp': if (direction !== 'DOWN') setDirection('UP'); break;
-        case 'ArrowDown': if (direction !== 'UP') setDirection('DOWN'); break;
-        case 'ArrowLeft': if (direction !== 'RIGHT') setDirection('LEFT'); break;
-        case 'ArrowRight': if (direction !== 'LEFT') setDirection('RIGHT'); break;
+      const map: Record<string, Dir> = { ArrowUp: 'UP', ArrowDown: 'DOWN', ArrowLeft: 'LEFT', ArrowRight: 'RIGHT' };
+      const d = map[e.key];
+      if (d) {
+        e.preventDefault();
+        turn(d);
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [direction]);
+  }, []);
 
-  const handleTouch = (dir: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT') => {
-    if (dir === 'UP' && direction !== 'DOWN') setDirection('UP');
-    if (dir === 'DOWN' && direction !== 'UP') setDirection('DOWN');
-    if (dir === 'LEFT' && direction !== 'RIGHT') setDirection('LEFT');
-    if (dir === 'RIGHT' && direction !== 'LEFT') setDirection('RIGHT');
-  };
+  const handleTouch = (dir: Dir) => turn(dir);
 
   return (
     <div className="space-y-3">
@@ -593,7 +582,7 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
           pet={<MyPet anim="failed" size={110} />}
           title={`Длина хвоста: ${snake.length}`}
           subtitle="Питомец врезался — но было весело!"
-          reward={`+${Math.floor(score / 2)} опыта`}
+          reward={rewardLabel(gained)}
           onExit={onComplete}
         />
       )}
@@ -606,7 +595,8 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
   const [board, setBoard] = useState<Array<'X' | 'O' | null>>(Array(9).fill(null));
   const [isPlayerTurn, setIsPlayerTurn] = useState(true);
   const [winner, setWinner] = useState<'X' | 'O' | 'draw' | null>(null);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
 
   const checkWinner = (board: Array<'X' | 'O' | null>): 'X' | 'O' | 'draw' | null => {
     const lines = [
@@ -672,8 +662,7 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
     if (result) {
       setWinner(result);
       if (result === 'X') sfx.win();
-      if (result === 'X') gainExp(20);
-      else if (result === 'draw') gainExp(10);
+      setGained(playedGame('tictactoe', result === 'X' ? 20 : result === 'draw' ? 10 : 0));
       track.game('tictactoe');
       if (result === 'X') {
         track.win();
@@ -694,6 +683,8 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
       if (aiResult) {
         setWinner(aiResult);
         if (aiResult === 'O') sfx.lose();
+        setGained(playedGame('tictactoe', aiResult === 'draw' ? 10 : 2));
+        track.game('tictactoe');
       }
       setIsPlayerTurn(true);
     }, 500);
@@ -742,7 +733,8 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
       {winner && (
         <div className="text-center">
           <p className="text-emerald-300 text-sm font-bold mb-3">
-            {winner === 'X' ? '+20 опыта' : winner === 'draw' ? '+10 опыта' : 'Питомец победил — реванш?'}
+            {winner === 'O' ? 'Питомец победил — реванш? ' : ''}
+            {rewardLabel(gained)}
           </p>
           <button onClick={onComplete} className="btn-neon">
             Готово
@@ -760,7 +752,8 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
   const [reactionTime, setReactionTime] = useState(0);
   const [bestTime, setBestTime] = useState<number | null>(null);
   const [attempts, setAttempts] = useState(0);
-  const { gainExp } = usePetStore();
+  const playedGame = usePetStore((s) => s.playedGame);
+  const [gained, setGained] = useState<number | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   const startRound = () => {
@@ -792,9 +785,8 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
       setReactionTime(time);
       setAttempts(a => a + 1);
       
-      if (!bestTime || time < bestTime) {
-        setBestTime(time);
-      }
+      const best = bestTime === null ? time : Math.min(bestTime, time);
+      setBestTime(best);
 
       setGameState('clicked');
       sfx.good();
@@ -802,9 +794,9 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
       if (attempts + 1 >= 5) {
         setTimeout(() => {
           setGameState('done');
-          gainExp(Math.max(10, Math.floor(1000 / (bestTime || time))));
+          setGained(playedGame('reaction', Math.min(40, Math.max(10, Math.round((700 - best) / 12)))));
           track.game('reaction');
-          track.best('reactionBest', Math.min(bestTime ?? time, time), true);
+          track.best('reactionBest', best, true);
           track.win();
         }, 1500);
       } else {
@@ -833,7 +825,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
           pet={<MyPet anim="wave" size={110} />}
           title={`${bestTime} мс`}
           subtitle={bestTime && bestTime < 300 ? 'Молниеносно!' : 'Лучшее время реакции'}
-          reward={`+${Math.max(10, Math.floor(1000 / (bestTime || 1)))} опыта`}
+          reward={rewardLabel(gained)}
           onExit={onComplete}
         />
       ) : (
