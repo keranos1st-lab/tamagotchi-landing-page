@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { usePetStore } from '@/store/petStore';
 import { PET_ICONS } from './sprites';
+import { sfx } from './sound';
 
 interface NotifySettings {
   enabled: boolean;
@@ -76,6 +77,7 @@ export function usePetNotifications() {
         };
       }
       flashTitle(`🔔 ${s.name} зовёт!`);
+      sfx.notify();
     };
     const id = setInterval(check, 15000);
     return () => clearInterval(id);

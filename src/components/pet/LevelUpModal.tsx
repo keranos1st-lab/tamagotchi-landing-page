@@ -4,6 +4,7 @@ import { usePetStore, type EvolutionStage } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
 import { PetSprite } from './PetSprite';
 import type { PetAnim } from './sprites';
+import { sfx } from './sound';
 
 const COLORS = ['#f472b6', '#a78bfa', '#22d3ee', '#fde047', '#34d399', '#fb923c', '#ffffff'];
 const STAGE_LABEL: Record<EvolutionStage, string> = { baby: 'Малыш', teen: 'Подросток', adult: 'Взрослый' };
@@ -75,6 +76,7 @@ export function LevelUpModal() {
     if (!levelUp) return;
     setShown(levelUp.from);
     setAnim('jump');
+    sfx.levelUp();
     const steps: ReturnType<typeof setTimeout>[] = [];
     steps.push(setTimeout(() => setShown(levelUp.to), 650));
     steps.push(setTimeout(() => setAnim('play'), 1500));

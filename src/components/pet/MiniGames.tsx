@@ -5,6 +5,7 @@ import { PET_ICONS, type PetAnim } from './sprites';
 import { ChaseGame } from './ChaseGame';
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
+import { sfx } from './sound';
 
 function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
   const type = usePetStore((s) => s.type);
@@ -182,14 +183,17 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
     if (type === 'good') {
       setScore(s => s + 10);
       react('eat');
+      sfx.good();
     } else {
       setScore(s => Math.max(0, s - 15));
       react('failed');
+      sfx.bad();
     }
   };
 
   useEffect(() => {
     if (gameOver) {
+      sfx.win();
       gainExp(Math.floor(score / 2));
     }
   }, [gameOver]);
@@ -266,11 +270,13 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
           const matched = [...cards];
           matched[first].matched = true;
           matched[second].matched = true;
+          sfx.good();
           setCards(matched);
           setFlippedCards([]);
           
           if (matched.every(c => c.matched)) {
             setGameWon(true);
+            sfx.win();
             gainExp(Math.max(10, 50 - moves * 2));
           }
         }, 500);
@@ -353,6 +359,9 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
 
     if (index === questions[currentQ].correct) {
       setScore(s => s + 1);
+      sfx.good();
+    } else {
+      sfx.bad();
     }
 
     setTimeout(() => {
@@ -446,12 +455,14 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
 
         // Check wall collision
         if (head.x < 0 || head.x >= 20 || head.y < 0 || head.y >= 20) {
+          sfx.lose();
           setGameOver(true);
           return prev;
         }
 
         // Check self collision
         if (prev.some(segment => segment.x === head.x && segment.y === head.y)) {
+          sfx.lose();
           setGameOver(true);
           return prev;
         }
@@ -461,6 +472,7 @@ function SnakeGame({ onComplete }: { onComplete: () => void }) {
         // Check food
         if (head.x === food.x && head.y === food.y) {
           setScore(s => s + 10);
+          sfx.eat();
           setFood({
             x: Math.floor(Math.random() * 20),
             y: Math.floor(Math.random() * 20),
@@ -636,10 +648,12 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
     const newBoard = [...board];
     newBoard[index] = 'X';
     setBoard(newBoard);
+    sfx.pop();
 
     const result = checkWinner(newBoard);
     if (result) {
       setWinner(result);
+      if (result === 'X') sfx.win();
       if (result === 'X') gainExp(20);
       else if (result === 'draw') gainExp(10);
       return;
@@ -653,8 +667,10 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
       setBoard(aiBoard);
 
       const aiResult = checkWinner(aiBoard);
+      sfx.click();
       if (aiResult) {
         setWinner(aiResult);
+        if (aiResult === 'O') sfx.lose();
       }
       setIsPlayerTurn(true);
     }, 500);
@@ -729,6 +745,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
     const delay = Math.random() * 3000 + 2000; // 2-5 seconds
     timeoutRef.current = setTimeout(() => {
       setGameState('go');
+      sfx.pop();
       setStartTime(Date.now());
     }, delay);
   };
@@ -740,6 +757,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
     }
 
     if (gameState === 'ready') {
+      sfx.bad();
       // Too early!
       clearTimeout(timeoutRef.current);
       setGameState('waiting');
@@ -756,6 +774,7 @@ function ReactionGame({ onComplete }: { onComplete: () => void }) {
       }
 
       setGameState('clicked');
+      sfx.good();
       
       if (attempts + 1 >= 5) {
         setTimeout(() => {

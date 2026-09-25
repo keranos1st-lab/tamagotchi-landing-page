@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePetStore } from '@/store/petStore';
+import { sfx } from './sound';
 
 const PHRASES = ['Мррр…', 'Ещё-ещё!', 'Как приятно!', 'Обожаю тебя!', 'Хи-хи, щекотно!', 'Ты лучший!', 'Не останавливайся!'];
 const ASK_MORE = ['Погладь ещё?', 'А ещё?', 'Уже всё?..'];
@@ -33,6 +34,7 @@ export function usePetting() {
       const now = performance.now();
       setPetting(true);
       strokes.current += 1;
+      sfx.purr();
       setLove((l) => Math.min(100, l + 6));
       clearTimeout(askTimer.current);
       clearTimeout(endTimer.current);
@@ -45,6 +47,7 @@ export function usePetting() {
         lastHeart.current = now;
         const id = heartId.current++;
         setHearts((h) => [...h.slice(-10), { id, x, y }]);
+        sfx.heart();
         setTimeout(() => setHearts((h) => h.filter((p) => p.id !== id)), 1100);
       }
       if (strokes.current === 1 || strokes.current % 6 === 0) {
@@ -56,7 +59,10 @@ export function usePetting() {
         const total = strokes.current;
         strokes.current = 0;
         if (total >= 3) {
-          askTimer.current = setTimeout(() => say(ASK_MORE[Math.floor(Math.random() * ASK_MORE.length)], 2200), 700);
+          askTimer.current = setTimeout(() => {
+            say(ASK_MORE[Math.floor(Math.random() * ASK_MORE.length)], 2200);
+            sfx.beg();
+          }, 700);
         }
       }, 900);
     },

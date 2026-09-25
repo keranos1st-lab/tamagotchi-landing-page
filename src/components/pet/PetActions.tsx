@@ -1,5 +1,6 @@
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
+import { ACTION_SFX } from './sound';
 
 type ActionType = 'feed' | 'play' | 'train' | 'sleep' | 'heal' | null;
 
@@ -28,6 +29,7 @@ export function PetActions({ onAction }: PetActionsProps) {
             onClick={() => {
               a.fn();
               onAction(a.id);
+              ACTION_SFX[a.id === 'feed' ? 'eat' : a.id === 'train' ? 'study' : a.id]?.();
             }}
             className="pa-tile group p-4 text-left"
           >

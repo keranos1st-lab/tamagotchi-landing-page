@@ -4,6 +4,7 @@ import { PetSprite } from './PetSprite';
 import type { PetAnim } from './sprites';
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
+import { sfx } from './sound';
 
 const DURATION = 30;
 const PET = 70;
@@ -66,6 +67,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
         if (dist < CATCH_DIST) {
           catchesRef.current += 1;
           setCatches(catchesRef.current);
+          sfx.jump();
           setFlash({ x: m.x, y: m.y, id: t });
           setAnim(Math.random() < 0.5 ? 'jump' : 'wave');
           stunned.current = t + 900;
@@ -100,6 +102,8 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     if (phase === 'done' && !rewarded.current) {
       rewarded.current = true;
+      if (catchesRef.current > 0) sfx.win();
+      else sfx.lose();
       gainExp(reward);
       playStat();
     }
@@ -122,6 +126,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
     setPos(start);
     stunned.current = performance.now() + 800;
     setPhase('play');
+    sfx.pop();
   };
 
   if (phase === 'done') {

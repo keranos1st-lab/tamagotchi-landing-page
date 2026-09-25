@@ -13,6 +13,7 @@ import { PetActions } from './PetActions';
 import { PetStats } from './PetStats';
 import { PetChat } from './PetChat';
 import { PetHeader } from './PetHeader';
+import { sfx } from './sound';
 import { MiniGames } from './MiniGames';
 import { Achievements } from './Achievements';
 import Icon from '@/components/ui/icon';
@@ -180,7 +181,10 @@ export function GameScreen() {
               return (
                 <button
                   key={t.id}
-                  onClick={() => setActiveTab(t.id)}
+                  onClick={() => {
+                    setActiveTab(t.id);
+                    sfx.click();
+                  }}
                   className={`relative flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-extrabold transition-all ${
                     active
                       ? 'bg-gradient-to-r from-violet-500 to-pink-500 text-white shadow-[0_8px_24px_-8px_rgba(236,72,153,0.7)]'

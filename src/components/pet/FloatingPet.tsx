@@ -7,6 +7,7 @@ import { getPipApi, openPipWindow, PipPortal } from './PipWindow';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { PetActionPill, PillButton } from './PetActionPill';
 import { wantsCuddleNow } from './useCuddle';
+import { sfx, ACTION_SFX } from './sound';
 
 const SIZE = 120;
 const SPEED = 90;
@@ -161,6 +162,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         special.current = now + ms;
         setAnim(a);
         setActivity(a);
+        if (a === 'sleep') sfx.snore();
         clearTimeout(activityTimer.current);
         activityTimer.current = setTimeout(() => {
           setActivity(null);
@@ -201,6 +203,8 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
 
   const playOnce = (a: PetAnim, ms: number, text?: string) => {
     stopActivity();
+    if (a === 'failed') sfx.sad();
+    else if (a !== 'pet') ACTION_SFX[a]?.();
     target.current = null;
     chasing.current = false;
     special.current = performance.now() + ms;
@@ -218,6 +222,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     strokeTravel.current = 0;
     special.current = performance.now() + 20000;
     setAnim('beg');
+    sfx.beg();
     setBubble(BEG_LINES[Math.floor(Math.random() * BEG_LINES.length)]);
     clearTimeout(askTimer.current);
     askTimer.current = setTimeout(() => {
@@ -231,6 +236,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     cuddle.current = 'none';
     clearTimeout(askTimer.current);
     usePetStore.getState().pet();
+    sfx.purr();
     const lines = ['Мррр! Спасибо!', 'Вот это счастье!', 'Люблю тебя!'];
     playOnce('pet', 2200, lines[Math.floor(Math.random() * lines.length)]);
   };
@@ -301,6 +307,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         playOnce('wave', 1600, `Привет! Я ${name}`);
       } else {
         usePetStore.getState().pet();
+        sfx.purr();
         const lines = ['Мррр…', 'Ещё!', 'Приятно!', 'Хи-хи!'];
         playOnce('pet', 1400, lines[Math.floor(Math.random() * lines.length)]);
       }

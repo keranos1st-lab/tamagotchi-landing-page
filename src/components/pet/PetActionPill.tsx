@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import Icon from '@/components/ui/icon';
 import { usePetStore } from '@/store/petStore';
 import type { PetAnim } from './sprites';
+import { ACTION_SFX } from './sound';
 
 export function PillButton({ icon, title, onClick }: { icon: string; title: string; onClick: () => void }) {
   return (
@@ -35,6 +36,7 @@ export function PetActionPill({ onAction, extra }: { onAction: (a: PetAnim) => v
           onClick={() => {
             a.fn();
             onAction(a.anim);
+            ACTION_SFX[a.anim]?.();
           }}
         />
       ))}
