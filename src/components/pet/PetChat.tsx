@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { usePetStore, type ChatMessage, type TextAction } from '@/store/petStore';
 import { useMemoryStore } from '@/store/memoryStore';
-import { askPet, fetchAiStatus, MAX_MESSAGE, type AiStatus } from '@/utils/petAi';
+import { askPet, MAX_MESSAGE } from '@/utils/petAi';
+import { useAiStatus, useAiStatusStore } from '@/store/aiStatusStore';
 import Icon from '@/components/ui/icon';
 import { PET_ICONS } from './sprites';
 import { PetSprite } from './PetSprite';
@@ -25,7 +26,8 @@ export function PetChat() {
 
   const [input, setInput] = useState('');
   const [busy, setBusyLocal] = useState(false);
-  const [status, setStatus] = useState<AiStatus | null | undefined>(undefined);
+  const status = useAiStatus();
+  const { patch: patchStatus, refresh: refreshStatus } = useAiStatusStore.getState();
   const [helperOpen, setHelperOpen] = useState(false);
   const [picked, setPicked] = useState('');
   const [memOpen, setMemOpen] = useState(false);
@@ -40,8 +42,8 @@ export function PetChat() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    fetchAiStatus().then(setStatus);
-  }, []);
+    refreshStatus();
+  }, [refreshStatus]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -77,15 +79,20 @@ export function PetChat() {
       earn(task ? 'help' : 'chat', task ? 6 : 3);
       useThinkingStore.getState().cheer();
       if (res.remember) mem.propose(res.remember);
-      setStatus((s) => (s && res.remainingToday !== undefined ? { ...s, remainingToday: res.remainingToday } : s));
+      if (res.remainingToday !== undefined) {
+        const cur = useAiStatusStore.getState().status;
+        patchStatus({ remainingToday: res.remainingToday, usedToday: cur?.limits ? cur.limits.perDay - res.remainingToday : cur?.usedToday });
+      }
     } else {
       addChatMessage('pet', '', {
         kind: 'error',
         error: { code: res.code, message: res.message, retryable: res.retryable },
         retry: { message, task },
       });
-      if (res.code === 'no_key' || res.code === 'no_function') setStatus({ configured: false });
-      if (res.code === 'daily_user') setStatus((s) => (s ? { ...s, remainingToday: 0 } : s));
+      if (res.code === 'no_key' || res.code === 'no_function') patchStatus({ configured: false });
+      else if (res.code === 'daily_user') patchStatus({ remainingToday: 0 });
+      else if (res.code === 'budget') patchStatus({ budgetOk: false });
+      else refreshStatus();
     }
     setBusy(false);
   };

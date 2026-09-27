@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { fetchAiStatus, type AiStatus } from '@/utils/petAi';
+import { useEffect } from 'react';
+import { useAiStatus, useAiStatusStore } from '@/store/aiStatusStore';
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
 import { Panel, PanelTitle } from './ui';
@@ -111,9 +111,13 @@ function formatAge(min: number) {
 }
 
 function AiStatusBadge() {
-  const [st, setSt] = useState<AiStatus | null | undefined>(undefined);
+  const st = useAiStatus();
   useEffect(() => {
-    fetchAiStatus().then(setSt);
+    const { status, refresh } = useAiStatusStore.getState();
+    if (status === undefined) refresh();
+    const onVisible = () => document.visibilityState === 'visible' && refresh();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
   const ok = st?.configured && st.budgetOk !== false;
   const tone = st === undefined ? 'white' : ok ? 'emerald' : st === null ? 'amber' : 'rose';
