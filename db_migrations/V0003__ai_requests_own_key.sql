@@ -1,0 +1,1 @@
+ALTER TABLE t_p91879943_tamagotchi_landing_p.ai_requests ADD COLUMN IF NOT EXISTS own_key BOOLEAN NOT NULL DEFAULT FALSE;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { PetType, PET_NAMES, usePetStore } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
+import { AccountButton } from './account/AccountButton';
 import Icon from '@/components/ui/icon';
 
 const PET_INFO: Record<PetType, { emoji: string; color: string; desc: string }> = {
@@ -50,6 +51,9 @@ export function PetSelection() {
           <p className="mx-auto mt-4 max-w-xl text-base text-white/60 sm:text-lg">
             Выбери компаньона. Корми, играй и обучай — и он станет твоим умным помощником.
           </p>
+          <div className="mt-5 flex justify-center">
+            <AccountButton variant="pill" />
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">

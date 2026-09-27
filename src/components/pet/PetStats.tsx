@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { useAiStatus, useAiStatusStore } from '@/store/aiStatusStore';
+import { PROVIDERS, useAiKeyStore } from '@/store/aiKeyStore';
+import { openSettings } from './account/AccountButton';
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
 import { Panel, PanelTitle } from './ui';
@@ -112,6 +114,7 @@ function formatAge(min: number) {
 
 function AiStatusBadge() {
   const st = useAiStatus();
+  const own = useAiKeyStore((s) => (s.enabled && s.key ? s : null));
   useEffect(() => {
     const { status, refresh } = useAiStatusStore.getState();
     if (status === undefined) refresh();
@@ -119,6 +122,19 @@ function AiStatusBadge() {
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, []);
+  if (own) {
+    return (
+      <button onClick={() => openSettings('ai')} className="mt-3 flex w-full items-center gap-2.5 rounded-2xl border border-cyan-400/25 bg-cyan-400/[0.07] p-3 text-left text-cyan-100">
+        <Icon name="KeyRound" size={14} className="text-cyan-300" />
+        <div className="text-xs leading-snug">
+          <div className="font-bold">AI через ваш ключ</div>
+          <div className="text-white/50">
+            {PROVIDERS[own.provider].label} · {own.model || PROVIDERS[own.provider].model}
+          </div>
+        </div>
+      </button>
+    );
+  }
   const ok = st?.configured && st.budgetOk !== false;
   const tone = st === undefined ? 'white' : ok ? 'emerald' : st === null ? 'amber' : 'rose';
   const title = st === undefined ? 'Проверяю AI…' : ok ? 'AI-помощник подключён' : st === null ? 'AI: нет связи с сервером' : !st.configured ? 'AI не настроен' : 'Дневной бюджет AI исчерпан';
@@ -143,10 +159,13 @@ function AiStatusBadge() {
         {ok && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />}
         <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${dot[tone]}`} />
       </span>
-      <div className="text-xs leading-snug">
+      <div className="flex-1 text-xs leading-snug">
         <div className="font-bold">{title}</div>
         {sub && <div className="text-white/50">{sub}</div>}
       </div>
+      <button onClick={() => openSettings('ai')} className="shrink-0 rounded-lg px-1.5 py-1 text-white/50 hover:bg-white/10 hover:text-white" title="Подключить свой ключ AI">
+        <Icon name="KeyRound" size={13} />
+      </button>
     </div>
   );
 }

@@ -1,7 +1,8 @@
 import func2url from '../../backend/func2url.json';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
+import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
 
-export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number };
+export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number; ownKey?: boolean };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiResult = AiOk | AiErr;
 
@@ -64,7 +65,7 @@ export async function askPet(args: {
     const res = await fetch(URL, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId() },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId(), ...ownKeyHeaders() },
       body: JSON.stringify({
         message,
         task,
@@ -84,7 +85,7 @@ export async function askPet(args: {
     });
     const data = await res.json().catch(() => null);
     if (res.ok && data?.reply) {
-      return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday };
+      return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday, ownKey: !!data.ownKey };
     }
     if (data?.error) return { ok: false, code: data.error, message: data.message || 'Ошибка AI', retryable: !!data.retryable };
     if (res.status === 504 || res.status === 502) return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };
@@ -94,5 +95,19 @@ export async function askPet(args: {
     return NETWORK;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+export async function checkOwnKey(provider: AiProvider, key: string, model: string): Promise<{ ok: true; model: string } | AiErr> {
+  if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
+  const headers: Record<string, string> = { 'X-User-Ai-Key': key.trim(), 'X-User-Ai-Provider': provider };
+  if (model.trim()) headers['X-User-Ai-Model'] = model.trim();
+  try {
+    const r = await fetch(`${URL}?check=1`, { headers });
+    const d = await r.json().catch(() => null);
+    if (r.ok && d?.ok) return { ok: true, model: d.model };
+    return { ok: false, code: d?.error ?? `http_${r.status}`, message: d?.message ?? 'Не удалось проверить ключ', retryable: !!d?.retryable };
+  } catch {
+    return NETWORK;
   }
 }

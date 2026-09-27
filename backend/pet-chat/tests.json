@@ -1,7 +1,33 @@
 {
   "tests": [
-    { "name": "CORS preflight", "method": "OPTIONS", "path": "/", "expectedStatus": 200 },
-    { "name": "Status", "method": "GET", "path": "/", "expectedStatus": 200, "expectedBody": { "configured": true }, "bodyMatcher": "partial" },
-    { "name": "Empty message", "method": "POST", "path": "/", "body": { "message": "" }, "expectedStatus": 400, "expectedBody": { "error": "empty" }, "bodyMatcher": "partial" }
+    {
+      "name": "CORS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Status",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "configured": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Empty message",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "message": ""
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "empty"
+      },
+      "bodyMatcher": "partial"
+    }
   ]
 }

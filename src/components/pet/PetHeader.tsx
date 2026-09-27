@@ -3,6 +3,7 @@ import { PET_ICONS } from './sprites';
 import Icon from '@/components/ui/icon';
 import { NotifyToggle } from './NotifyToggle';
 import { SoundToggle } from './SoundToggle';
+import { AccountButton } from './account/AccountButton';
 
 export function PetHeader() {
   const { name, type, level, exp, expToNext, resetPet } = usePetStore();
@@ -52,6 +53,7 @@ export function PetHeader() {
           </div>
           <SoundToggle />
           <NotifyToggle />
+          <AccountButton />
           <button onClick={onReset} title="Сменить питомца" className="icon-btn">
             <Icon name="RefreshCw" size={17} />
           </button>

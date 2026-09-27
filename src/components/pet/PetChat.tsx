@@ -3,6 +3,8 @@ import { usePetStore, type ChatMessage, type TextAction } from '@/store/petStore
 import { useMemoryStore } from '@/store/memoryStore';
 import { askPet, MAX_MESSAGE } from '@/utils/petAi';
 import { useAiStatus, useAiStatusStore } from '@/store/aiStatusStore';
+import { useAiKeyStore } from '@/store/aiKeyStore';
+import { openSettings } from './account/AccountButton';
 import Icon from '@/components/ui/icon';
 import { PET_ICONS } from './sprites';
 import { PetSprite } from './PetSprite';
@@ -27,6 +29,7 @@ export function PetChat() {
   const [input, setInput] = useState('');
   const [busy, setBusyLocal] = useState(false);
   const status = useAiStatus();
+  const ownKey = useAiKeyStore((s) => s.enabled && !!s.key);
   const { patch: patchStatus, refresh: refreshStatus } = useAiStatusStore.getState();
   const [helperOpen, setHelperOpen] = useState(false);
   const [picked, setPicked] = useState('');
@@ -79,7 +82,7 @@ export function PetChat() {
       earn(task ? 'help' : 'chat', task ? 6 : 3);
       useThinkingStore.getState().cheer();
       if (res.remember) mem.propose(res.remember);
-      if (res.remainingToday !== undefined) {
+      if (!res.ownKey && res.remainingToday !== undefined) {
         const cur = useAiStatusStore.getState().status;
         patchStatus({ remainingToday: res.remainingToday, usedToday: cur?.limits ? cur.limits.perDay - res.remainingToday : cur?.usedToday });
       }
@@ -89,7 +92,9 @@ export function PetChat() {
         error: { code: res.code, message: res.message, retryable: res.retryable },
         retry: { message, task },
       });
-      if (res.code === 'no_key' || res.code === 'no_function') patchStatus({ configured: false });
+      if (useAiKeyStore.getState().enabled) {
+        /* свой ключ: лимиты общего AI не затрагиваются */
+      } else if (res.code === 'no_key' || res.code === 'no_function') patchStatus({ configured: false });
       else if (res.code === 'daily_user') patchStatus({ remainingToday: 0 });
       else if (res.code === 'budget') patchStatus({ budgetOk: false });
       else refreshStatus();
@@ -129,8 +134,8 @@ export function PetChat() {
     }
   };
 
-  const notConfigured = status?.configured === false;
-  const outOfQuota = status?.remainingToday === 0;
+  const notConfigured = !ownKey && status?.configured === false;
+  const outOfQuota = !ownKey && (status?.remainingToday === 0 || status?.budgetOk === false);
   const tooLong = input.length > MAX_MESSAGE;
   const locked = busy || notConfigured;
 
@@ -152,7 +157,14 @@ export function PetChat() {
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
-          {status?.remainingToday !== undefined && (
+          {ownKey ? (
+            <button onClick={() => openSettings('ai')} title="Чат работает через ваш ключ">
+              <Chip className="!text-cyan-200">
+                <Icon name="KeyRound" size={12} />
+                Свой ключ
+              </Chip>
+            </button>
+          ) : status?.remainingToday !== undefined && (
             <Chip className={outOfQuota ? '!text-rose-200' : '!text-cyan-200'}>
               <Icon name="MessageSquare" size={12} />
               {status.remainingToday}/{status.limits?.perDay}
@@ -178,7 +190,11 @@ export function PetChat() {
 
       {notConfigured && (
         <div className="mx-3 mt-3 rounded-xl border border-rose-300/25 bg-rose-500/[0.08] px-3 py-2 text-xs text-rose-100">
-          <b>AI-чат не настроен.</b> Для работы нужна серверная функция <code>pet-chat</code> и секрет <code>POLZA_AI_API_KEY</code>. Шаблонные ответы не подставляются.
+          <b>AI-чат не настроен.</b> Для работы нужна серверная функция <code>pet-chat</code> и секрет <code>POLZA_AI_API_KEY</code> — или{' '}
+          <button onClick={() => openSettings('ai')} className="font-bold underline">
+            подключите свой ключ
+          </button>
+          .
         </div>
       )}
 
@@ -275,7 +291,14 @@ export function PetChat() {
       )}
 
       <div className="p-3 pt-1" data-pet-chat-input>
-        {outOfQuota && <div className="mb-1.5 text-center text-[11px] text-rose-300">Дневной лимит сообщений исчерпан — возвращайся завтра</div>}
+        {outOfQuota && (
+          <div className="mb-1.5 text-center text-[11px] text-rose-300">
+            Дневной лимит общего AI исчерпан.{' '}
+            <button onClick={() => openSettings('ai')} className="font-bold text-cyan-200 underline-offset-2 hover:underline">
+              Подключить свой ключ
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-black/20 p-1.5 transition focus-within:border-pink-300/40">
           <button
             onClick={() => setHelperOpen((v) => !v)}

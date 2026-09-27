@@ -76,11 +76,20 @@ export function MessageBubble({
         <div className="max-w-[85%] rounded-2xl rounded-bl-md border border-rose-300/25 bg-rose-500/[0.08] px-4 py-2.5 text-sm">
           <div className="font-bold text-rose-100">Ответ AI не получен</div>
           <div className="mt-0.5 text-xs text-rose-100/70">{msg.error?.message}</div>
+          {(msg.error?.code?.startsWith('own_') || msg.error?.code === 'daily_user' || msg.error?.code === 'budget') && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('petagent:settings', { detail: 'ai' }))}
+              className="mt-2 mr-2 inline-flex items-center gap-1.5 rounded-full border border-cyan-200/30 bg-cyan-400/15 px-3 py-1 text-xs font-bold text-cyan-50 transition hover:bg-cyan-400/30"
+            >
+              <Icon name="KeyRound" size={12} />
+              {msg.error.code.startsWith('own_') ? 'Проверить ключ' : 'Подключить свой ключ'}
+            </button>
+          )}
           {msg.error?.retryable && msg.retry && (
             <button
               disabled={busy}
               onClick={() => onRetry(msg)}
-              className="mt-2 flex items-center gap-1.5 rounded-full border border-rose-200/30 bg-rose-400/15 px-3 py-1 text-xs font-bold text-rose-50 transition hover:bg-rose-400/30 disabled:opacity-40"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-rose-200/30 bg-rose-400/15 px-3 py-1 text-xs font-bold text-rose-50 transition hover:bg-rose-400/30 disabled:opacity-40"
             >
               <Icon name="RotateCcw" size={12} />
               Повторить

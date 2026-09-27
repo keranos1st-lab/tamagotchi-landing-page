@@ -1,0 +1,7 @@
+{
+  "tests": [
+    { "name": "CORS", "method": "OPTIONS", "path": "/", "expectedStatus": 200 },
+    { "name": "Без токена", "method": "GET", "path": "/", "expectedStatus": 401, "expectedBody": { "error": "unauthorized" }, "bodyMatcher": "partial" },
+    { "name": "Плохая почта", "method": "POST", "path": "/", "body": { "action": "login", "email": "nope", "password": "12345678" }, "expectedStatus": 400, "expectedBody": { "error": "bad_email" }, "bodyMatcher": "partial" }
+  ]
+}

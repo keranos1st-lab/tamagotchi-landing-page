@@ -4,6 +4,8 @@ AI-чат питомца PetAgent через сервис Польза (polza.ai
 память, на которую пользователь дал согласие. Помогает с текстом:
 объяснить, сократить, исправить, помочь ответить. Ограничивает длину,
 частоту запросов и суточный бюджет, ведёт учёт расхода в БД.
+Пользователь может передать свой ключ (X-User-Ai-Key) к Польза, OpenAI,
+OpenRouter или DeepSeek — тогда запрос идёт за его счёт, ключ не сохраняется.
 """
 import json
 import os
@@ -32,7 +34,7 @@ EST_COST = 0.3
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Id',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Id, X-User-Ai-Key, X-User-Ai-Provider, X-User-Ai-Model',
     'Access-Control-Max-Age': '86400',
 }
 
@@ -60,9 +62,22 @@ TEXT_ACTIONS = {
     'reply': 'Это сообщение, на которое пользователю нужно ответить. Предложи 2 варианта ответа: вежливый нейтральный и более тёплый/неформальный. Каждый — готовый к отправке текст.',
 }
 
+PROVIDERS = {
+    'polza': ('https://polza.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
+    'openai': ('https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'),
+    'openrouter': ('https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
+    'deepseek': ('https://api.deepseek.com/chat/completions', 'deepseek-chat'),
+}
+OWN_PER_MINUTE = 20
+OWN_PER_DAY = 500
+
 ERRORS = {
     'no_key': 'Не настроен ключ AI (секрет POLZA_AI_API_KEY)',
     'bad_key': 'Ключ AI недействителен',
+    'own_bad_key': 'Ваш ключ отклонён сервисом — проверьте его в настройках AI',
+    'own_no_balance': 'На вашем аккаунте сервиса AI закончились средства',
+    'own_bad_model': 'Сервис не принял модель — проверьте название в настройках AI',
+    'own_bad_provider': 'Неизвестный сервис AI',
     'no_balance': 'На балансе сервиса AI закончились средства',
     'rate_minute': 'Слишком часто — подожди минуту',
     'daily_user': 'Дневной лимит сообщений исчерпан',
@@ -98,16 +113,17 @@ def esc(v: str) -> str:
     return v.replace("'", "''")
 
 
-def usage(client_id: str, ip: str) -> dict:
+def usage(client_id: str, ip: str, own: bool = False) -> dict:
     conn = db()
     try:
         cur = conn.cursor()
+        k = 'TRUE' if own else 'FALSE'
         cur.execute(
             f"SELECT "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND created_at > NOW() - INTERVAL '1 minute'), "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COALESCE(SUM(cost) FILTER (WHERE created_at > date_trunc('day', NOW())), 0) "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND own_key = {k} AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COALESCE(SUM(cost) FILTER (WHERE own_key = FALSE AND created_at > date_trunc('day', NOW())), 0) "
             f"FROM {SCHEMA}.ai_requests WHERE created_at > date_trunc('day', NOW()) - INTERVAL '1 minute'"
         )
         m, d, dip, spent = cur.fetchone()
@@ -116,13 +132,13 @@ def usage(client_id: str, ip: str) -> dict:
         conn.close()
 
 
-def log(client_id: str, ip: str, kind: str, status: str, pt: int = 0, ct: int = 0, cost: float = 0.0) -> None:
+def log(client_id: str, ip: str, kind: str, status: str, pt: int = 0, ct: int = 0, cost: float = 0.0, own: bool = False) -> None:
     conn = db()
     try:
         cur = conn.cursor()
         cur.execute(
-            f"INSERT INTO {SCHEMA}.ai_requests (client_id, ip, kind, status, prompt_tokens, completion_tokens, cost) "
-            f"VALUES ('{esc(client_id)}', '{esc(ip)}', '{esc(kind)}', '{esc(status)}', {int(pt)}, {int(ct)}, {float(cost)})"
+            f"INSERT INTO {SCHEMA}.ai_requests (client_id, ip, kind, status, prompt_tokens, completion_tokens, cost, own_key) "
+            f"VALUES ('{esc(client_id)}', '{esc(ip)}', '{esc(kind)}', '{esc(status)}', {int(pt)}, {int(ct)}, {float(cost)}, {'TRUE' if own else 'FALSE'})"
         )
         conn.commit()
     finally:
@@ -195,17 +211,21 @@ def clean_history(history: list) -> list:
     return out
 
 
-def call_model(messages: list, max_tokens: int, timeout: float) -> tuple:
+def call_model(messages: list, max_tokens: int, timeout: float, own: dict | None = None) -> tuple:
+    if own:
+        url, model, key = own['url'], own['model'], own['key']
+    else:
+        url, model, key = API_URL, os.environ.get('POLZA_AI_MODEL') or DEFAULT_MODEL, os.environ['POLZA_AI_API_KEY']
     payload = json.dumps({
-        'model': os.environ.get('POLZA_AI_MODEL') or DEFAULT_MODEL,
+        'model': model,
         'messages': messages,
         'max_tokens': max_tokens,
         'temperature': 0.6,
     }).encode('utf-8')
     req = urllib.request.Request(
-        API_URL,
+        url,
         data=payload,
-        headers={'Authorization': f"Bearer {os.environ['POLZA_AI_API_KEY']}", 'Content-Type': 'application/json'},
+        headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'HTTP-Referer': 'https://petagent.app', 'X-Title': 'PetAgent'},
         method='POST',
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -238,12 +258,24 @@ def handler(event: dict, context) -> dict:
     client_id = re.sub(r'[^a-zA-Z0-9_-]', '', headers.get('x-client-id') or '')[:64] or 'anon'
     ip = ((event.get('requestContext') or {}).get('identity') or {}).get('sourceIp') or ''
 
+    own = None
+    user_key = (headers.get('x-user-ai-key') or '').strip()
+    if user_key:
+        provider = (headers.get('x-user-ai-provider') or 'polza').strip().lower()
+        if provider not in PROVIDERS or len(user_key) > 300 or not re.fullmatch(r'[A-Za-z0-9_\-.:]+', user_key):
+            return fail(400, 'own_bad_provider' if provider not in PROVIDERS else 'own_bad_key', False)
+        url, default_model = PROVIDERS[provider]
+        model = re.sub(r'[^A-Za-z0-9_\-./:]', '', headers.get('x-user-ai-model') or '')[:100] or default_model
+        own = {'url': url, 'model': model, 'key': user_key, 'provider': provider}
+
     if method == 'GET':
+        if own and (event.get('queryStringParameters') or {}).get('check'):
+            return check_own(own)
         return respond(200, status_info(client_id, ip))
     if method != 'POST':
         return fail(405, 'bad_request', False)
 
-    if not os.environ.get('POLZA_AI_API_KEY'):
+    if not own and not os.environ.get('POLZA_AI_API_KEY'):
         return fail(503, 'no_key', False)
 
     try:
@@ -272,19 +304,24 @@ def handler(event: dict, context) -> dict:
             return fail(413, 'too_long', False, {'limit': MAX_MESSAGE})
         user_content = message
 
+    is_own = own is not None
     try:
-        u = usage(client_id, ip)
+        u = usage(client_id, ip, is_own)
     except Exception as e:
         print(f'usage db error: {e}')
         return fail(503, 'db_error', True)
-    if u['minute'] >= PER_MINUTE:
+    if u['minute'] >= (OWN_PER_MINUTE if is_own else PER_MINUTE):
         return fail(429, 'rate_minute', True, {'retryAfter': 60})
-    if u['day'] >= PER_DAY_CLIENT:
-        return fail(429, 'daily_user', False, {'limit': PER_DAY_CLIENT})
-    if u['day_ip'] >= PER_DAY_IP:
-        return fail(429, 'daily_ip', False)
-    if u['spent'] >= DAILY_BUDGET_RUB:
-        return fail(429, 'budget', False)
+    if is_own:
+        if u['day'] >= OWN_PER_DAY:
+            return fail(429, 'daily_user', False, {'limit': OWN_PER_DAY})
+    else:
+        if u['day'] >= PER_DAY_CLIENT:
+            return fail(429, 'daily_user', False, {'limit': PER_DAY_CLIENT})
+        if u['day_ip'] >= PER_DAY_IP:
+            return fail(429, 'daily_ip', False)
+        if u['spent'] >= DAILY_BUDGET_RUB:
+            return fail(429, 'budget', False)
 
     messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task))}]
     messages += clean_history(data.get('history') or [])
@@ -294,16 +331,16 @@ def handler(event: dict, context) -> dict:
     max_tokens = 1400 if task else 1100
     started = time.time()
     try:
-        result, _ = call_model(messages, max_tokens, 25)
+        result, _ = call_model(messages, max_tokens, 25, own)
     except urllib.error.HTTPError as e:
         detail = e.read().decode('utf-8', 'ignore')[:300]
-        print(f'Polza HTTP {e.code}: {detail}')
-        code = 'no_balance' if e.code == 402 else 'bad_key' if e.code in (401, 403) else 'provider_busy' if e.code == 429 else 'provider_error'
-        log(client_id, ip, kind, code)
+        print(f"{own['provider'] if own else 'polza'} HTTP {e.code}" + ('' if own else f': {detail}'))
+        code = map_http_error(e.code, detail, is_own)
+        log(client_id, ip, kind, code, own=is_own)
         return fail(502, code, code in ('provider_busy', 'provider_error'))
     except Exception as e:
-        print(f'Polza error after {time.time() - started:.1f}s: {e}')
-        log(client_id, ip, kind, 'timeout')
+        print(f'AI error after {time.time() - started:.1f}s: {type(e).__name__}')
+        log(client_id, ip, kind, 'timeout', own=is_own)
         return fail(504, 'timeout', True)
 
     choice = (result.get('choices') or [{}])[0]
@@ -312,9 +349,9 @@ def handler(event: dict, context) -> dict:
     pt = int(usage_info.get('prompt_tokens') or 0)
     ct = int(usage_info.get('completion_tokens') or 0)
     cost = usage_info.get('cost')
-    cost = float(cost) if isinstance(cost, (int, float)) else EST_COST
+    cost = 0.0 if is_own else float(cost) if isinstance(cost, (int, float)) else EST_COST
     if not reply.strip():
-        log(client_id, ip, kind, 'empty_reply', pt, ct, cost)
+        log(client_id, ip, kind, 'empty_reply', pt, ct, cost, is_own)
         return fail(502, 'provider_error', True)
 
     remember = None
@@ -323,12 +360,40 @@ def handler(event: dict, context) -> dict:
         remember = m.group(1).strip()[:200]
         reply = re.sub(r'\s*<<\s*remember:.*?>>\s*', '', reply, flags=re.IGNORECASE | re.DOTALL)
 
-    log(client_id, ip, kind, 'ok', pt, ct, cost)
-    return respond(200, {
+    log(client_id, ip, kind, 'ok', pt, ct, cost, is_own)
+    body = {
         'reply': reply.strip(),
         'remember': remember,
         'truncated': choice.get('finish_reason') == 'length',
         'model': result.get('model'),
-        'remainingToday': max(0, PER_DAY_CLIENT - u['day'] - 1),
+        'ownKey': is_own,
         'ms': int((time.time() - started) * 1000),
-    })
+    }
+    if not is_own:
+        body['remainingToday'] = max(0, PER_DAY_CLIENT - u['day'] - 1)
+    return respond(200, body)
+
+
+def map_http_error(status: int, detail: str, own: bool) -> str:
+    low = detail.lower()
+    if status == 402 or 'insufficient' in low or 'balance' in low or 'quota' in low:
+        return 'own_no_balance' if own else 'no_balance'
+    if status in (401, 403):
+        return 'own_bad_key' if own else 'bad_key'
+    if own and status in (400, 404) and 'model' in low:
+        return 'own_bad_model'
+    if status == 429:
+        return 'provider_busy'
+    return 'provider_error'
+
+
+def check_own(own: dict) -> dict:
+    try:
+        call_model([{'role': 'user', 'content': 'Ответь одним словом: ок'}], 5, 15, own)
+    except urllib.error.HTTPError as e:
+        code = map_http_error(e.code, e.read().decode('utf-8', 'ignore')[:300], True)
+        return fail(400, code, False)
+    except Exception:
+        return fail(504, 'timeout', True)
+    return respond(200, {'ok': True, 'provider': own['provider'], 'model': own['model']})
+
