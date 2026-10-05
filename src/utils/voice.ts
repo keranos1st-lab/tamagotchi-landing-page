@@ -194,7 +194,7 @@ function speakLocal(text: string): Promise<boolean> {
     const synth = window.speechSynthesis;
     if (!synth) return resolve(false);
     synth.cancel();
-    const u = new SpeechSynthesisUtterance(text.slice(0, 450));
+    const u = new SpeechSynthesisUtterance(text.slice(0, 2000));
     u.lang = 'ru-RU';
     const v = pickRussianVoice();
     if (v) u.voice = v;

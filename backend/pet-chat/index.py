@@ -73,10 +73,10 @@ PROVIDERS = {
     'openrouter': ('https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
     'deepseek': ('https://api.deepseek.com/chat/completions', 'deepseek-chat'),
 }
-VOICE_MAX_CHARS = 450
+VOICE_MAX_CHARS = 2000
 VOICE_PER_MINUTE = 6
 VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
-VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
+VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 30000)
 STT_RATE = 16000
 STT_MAX_BYTES = 1024 * 1024
 STT_MAX_SECONDS = 30
@@ -508,7 +508,7 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     except json.JSONDecodeError:
         return fail(400, 'bad_request', False)
     raw = str(data.get('text') or '')
-    if len(raw) > 4000:
+    if len(raw) > 8000:
         return fail(413, 'voice_too_long', False)
     text = clean_for_speech(raw)
     if not text:
