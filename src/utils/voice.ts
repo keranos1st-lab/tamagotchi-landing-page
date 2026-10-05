@@ -125,6 +125,69 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
   };
 }
 
+type RecognitionLike = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  maxAlternatives: number;
+  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
+  onerror: ((e: { error: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+function recognitionCtor(): (new () => RecognitionLike) | null {
+  const w = window as unknown as { SpeechRecognition?: new () => RecognitionLike; webkitSpeechRecognition?: new () => RecognitionLike };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
+
+export const nativeSupported = () => !!recognitionCtor();
+
+export type NativeEnd = { text: string; error?: string };
+
+export function startNativeRecognition(hooks: { onInterim: (text: string) => void; onEnd: (r: NativeEnd) => void }): { stop: () => void; cancel: () => void } {
+  const Ctor = recognitionCtor();
+  if (!Ctor) throw new Error('unsupported');
+  const r = new Ctor();
+  r.lang = 'ru-RU';
+  r.continuous = false;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+  let text = '';
+  let error: string | undefined;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    hooks.onEnd({ text: text.trim(), error });
+  };
+  r.onresult = (e) => {
+    let t = '';
+    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+    text = t;
+    hooks.onInterim(t);
+  };
+  r.onerror = (e) => {
+    if (e.error !== 'aborted') error = e.error;
+  };
+  r.onend = finish;
+  r.start();
+  return {
+    stop: () => r.stop(),
+    cancel: () => {
+      done = true;
+      r.onresult = r.onerror = r.onend = null;
+      try {
+        r.abort();
+      } catch {
+        /* уже остановлено */
+      }
+    },
+  };
+}
+
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
   const step = 0x8000;
