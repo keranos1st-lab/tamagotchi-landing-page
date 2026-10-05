@@ -76,6 +76,7 @@ VOICE_PER_MINUTE = 6
 VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
 VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
 VOICE_MODEL = os.environ.get('ELEVENLABS_MODEL') or 'eleven_multilingual_v2'
+ELEVEN_BASE = (os.environ.get('ELEVENLABS_BASE_URL') or 'https://api.elevenlabs.io').strip().rstrip('/')
 VOICE_ID_RE = re.compile(r'^[A-Za-z0-9]{10,40}$')
 OWN_PER_MINUTE = 20
 OWN_PER_DAY = 500
@@ -84,7 +85,9 @@ ERRORS = {
     'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_API_KEY',
     'voice_no_voice': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_VOICE_ID',
     'voice_bad_voice': 'Идентификатор голоса в ELEVENLABS_VOICE_ID некорректен',
+    'voice_region': 'ElevenLabs не принимает запросы с российских серверов, на которых работает функция. Нужен посредник за пределами России (секрет ELEVENLABS_BASE_URL)',
     'voice_bad_key': 'ElevenLabs не принял ключ API — проверьте ELEVENLABS_API_KEY',
+    'voice_no_permission': 'У ключа ElevenLabs нет права на синтез речи (Text to Speech) — включите его в настройках ключа',
     'voice_not_found': 'Выбранный голос недоступен для этого ключа ElevenLabs',
     'voice_quota': 'Лимит символов или баланс ElevenLabs исчерпан',
     'voice_busy': 'ElevenLabs временно перегружен',
@@ -214,6 +217,7 @@ def voice_status() -> dict:
             'hasKey': bool(key),
             'hasVoiceId': bool(voice),
             'model': VOICE_MODEL,
+            'viaRelay': ELEVEN_BASE != 'https://api.elevenlabs.io',
             'maxChars': VOICE_MAX_CHARS,
             'perMinute': VOICE_PER_MINUTE,
             'perDay': VOICE_PER_DAY,
@@ -261,19 +265,33 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
         'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75, 'style': 0.2, 'use_speaker_boost': True},
     }).encode('utf-8')
     req = urllib.request.Request(
-        f'https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
+        f'{ELEVEN_BASE}/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
         data=payload,
-        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg'},
+        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg', 'User-Agent': 'PetAgent/1.0 (+https://petagent.app)'},
         method='POST',
     )
     started = time.time()
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             audio = resp.read()
+            ctype = (resp.headers.get('Content-Type') or '').lower()
     except urllib.error.HTTPError as e:
-        detail = e.read().decode('utf-8', 'ignore')[:400].lower()
-        print(f'ElevenLabs HTTP {e.code}')
-        if e.code in (401, 403) and 'quota' not in detail:
+        raw_detail = e.read().decode('utf-8', 'ignore')[:3000]
+        detail = raw_detail.lower()
+        if '<html' in detail or 'sanctioned countr' in detail or 'restrict access' in detail:
+            print(f'ElevenLabs HTTP {e.code}: региональная блокировка (HTML-страница)')
+            log(client_id, ip, 'voice', 'voice_region')
+            return fail(502, 'voice_region', False, {'fallback': 'local'})
+        el_status = ''
+        try:
+            d = json.loads(raw_detail).get('detail')
+            el_status = str(d.get('status') if isinstance(d, dict) else d)[:80]
+        except Exception:
+            pass
+        print(f'ElevenLabs HTTP {e.code} status={el_status}')
+        if 'missing_permissions' in detail:
+            code = 'voice_no_permission'
+        elif e.code in (401, 403) and 'quota' not in detail:
             code = 'voice_bad_key'
         elif e.code == 404 or 'voice_not_found' in detail or 'not found' in detail:
             code = 'voice_not_found'
@@ -292,7 +310,14 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
         log(client_id, ip, 'voice', 'timeout')
         return fail(504, 'voice_error', True, {'fallback': 'local'})
 
-    if len(audio) < 500:
+    head = audio[:300].lstrip().lower()
+    is_mp3 = audio[:3] == b'ID3' or (len(audio) > 2 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0)
+    if head.startswith(b'<') or b'<html' in head:
+        print('ElevenLabs: вместо звука пришла HTML-страница (региональная блокировка)')
+        log(client_id, ip, 'voice', 'voice_region')
+        return fail(502, 'voice_region', False, {'fallback': 'local'})
+    if not is_mp3 or len(audio) < 500 or ('audio' not in ctype and 'octet-stream' not in ctype):
+        print(f'ElevenLabs: неожиданный ответ ctype={ctype!r} size={len(audio)}')
         log(client_id, ip, 'voice', 'empty_audio')
         return fail(502, 'voice_error', True, {'fallback': 'local'})
     log(client_id, ip, 'voice', 'ok', pt=len(text), ct=len(audio) // 1000)
