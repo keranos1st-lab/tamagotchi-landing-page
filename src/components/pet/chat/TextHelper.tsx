@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import Icon from '@/components/ui/icon';
 import type { TextAction } from '@/store/petStore';
 import { MAX_SOURCE, TEXT_ACTIONS } from '@/utils/petAi';
+import { usePetStore } from '@/store/petStore';
+import { IQ_LEVELS, iqLevel, iqNext } from '../iq';
 
 export function TextHelper({
   open,
@@ -26,6 +28,11 @@ export function TextHelper({
 
   if (!open) return null;
   const len = source.trim().length;
+  const iq = usePetStore.getState().intelligence;
+  const lvl = iqLevel(iq);
+  const cap = IQ_LEVELS[lvl].textLimit;
+  const nextLvl = iqNext(iq);
+  const overIq = len > cap && len <= MAX_SOURCE;
   const tooLong = len > MAX_SOURCE;
 
   const paste = async () => {
@@ -76,10 +83,15 @@ export function TextHelper({
           <Icon name="ClipboardPaste" size={12} />
           Вставить из буфера
         </button>
-        <span className={tooLong ? 'font-bold text-rose-300' : 'text-white/40'}>
-          {len} / {MAX_SOURCE}
+        <span className={tooLong ? 'font-bold text-rose-300' : overIq ? 'font-bold text-amber-300' : 'text-white/40'}>
+          {len} / {cap}
         </span>
       </div>
+      {overIq && nextLvl && (
+        <div className="mt-1 text-[11px] text-amber-200/90">
+          Питомец уровня «{IQ_LEVELS[lvl].name}» берёт текст до {cap} символов. Обучай его, чтобы дорасти до «{IQ_LEVELS[nextLvl.level].name}» (нужно ещё {nextLvl.need} IQ).
+        </div>
+      )}
 
       {action === 'reply' && (
         <input

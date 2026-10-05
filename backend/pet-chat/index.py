@@ -54,6 +54,13 @@ PERSONAS = {
     'owl': ('сова-робот', 'мудрая наставница, объясняет по шагам как учитель, иногда говорит «угу»'),
 }
 
+IQ_SMART = 35
+IQ_GENIUS = 70
+IQ_TEXT_LIMIT = {'baby': 300, 'smart': 2000, 'genius': MAX_SOURCE}
+IQ_NAMES = {'baby': 'Малыш', 'smart': 'Умный', 'genius': 'Гений'}
+IQ_SOUND = {'cat': 'Мур!', 'dog': 'Гав!', 'bird': 'Чирик!', 'fox': 'Фыр!', 'dragon': 'Рррр!', 'bunny': 'Прыг!', 'panda': 'Урр…', 'owl': 'Угу…'}
+HARD_MARK = re.compile(r'\s*<<\s*hard\s*>>\s*', re.IGNORECASE)
+
 STAGE_VOICE = {
     'baby': 'Ты ещё малыш: говоришь тепло и чуть по-детски, но сами объяснения — взрослые и точные.',
     'teen': 'Ты подросток: говоришь бодро и уверенно.',
@@ -607,7 +614,85 @@ def mood_line(stats: dict) -> str:
     return 'Сейчас ты ' + '; '.join(notes) + '. Упоминай состояние максимум одной короткой фразой в конце и только если это уместно.'
 
 
-def build_system(pet: dict, memory: list, task: bool, voice: bool = False) -> str:
+def parse_iq(pet: dict):
+    try:
+        return max(0.0, min(100.0, float(pet.get('iq'))))
+    except (TypeError, ValueError):
+        return None
+
+
+def iq_level(iq: float) -> str:
+    return 'genius' if iq >= IQ_GENIUS else 'smart' if iq >= IQ_SMART else 'baby'
+
+
+def iq_rules(iq: float, level: str, task: bool) -> str:
+    head = f'Твой интеллект: IQ {int(iq)} из 100, уровень «{IQ_NAMES[level]}». '
+    if level == 'genius':
+        return head + 'Ты можешь отвечать на любые вопросы максимально полно и глубоко.'
+    if level == 'baby':
+        return head + 'Ты ещё малыш: говори просто, коротко и по-детски, короткими фразами, без терминов и без длинных объяснений. Максимум 3–4 предложения.'
+    return head + 'Объясняй понятно и средней глубины, без излишней академичности. Не больше 8–10 предложений.'
+
+
+def classify_complexity(message: str, source: str, own: dict | None) -> int:
+    text = (message + ('\n' + source[:600] if source else ''))[:1200]
+    sys_prompt = (
+        'Ты оцениваешь сложность запроса пользователя к ИИ-помощнику по шкале 0–3. Ответь ОДНОЙ цифрой, без слов.\n'
+        '0 — приветствие, болтовня, благодарность, вопросы о самочувствии, шутки, игры, просьбы пошутить или спеть.\n'
+        '1 — простой бытовой вопрос, один факт, простой совет, короткий перевод, идея подарка, рецепт попроще.\n'
+        '2 — требует объяснения или нескольких шагов: план, сравнение, обзор темы, школьная программа, обычный текст на правку, простой фрагмент кода.\n'
+        '3 — профессиональная глубина: написание или разбор программного кода и алгоритмов, математика, физика, право, налоги, медицина, финансы, '
+        'научные темы, анализ данных, стратегии, архитектура, сложные многошаговые рассуждения, юридические и технические документы.'
+    )
+    try:
+        result, _ = call_model([
+            {'role': 'system', 'content': sys_prompt},
+            {'role': 'user', 'content': text},
+        ], 4, 8, own)
+        out = ((result.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+        m = re.search(r'[0-3]', out)
+        return int(m.group(0)) if m else 2
+    except Exception as e:
+        print(f'classify error: {type(e).__name__}')
+        return 2
+
+
+IQ_MAX_COMPLEXITY = {'baby': 1, 'smart': 2, 'genius': 3}
+
+
+def iq_decline_hard(pet: dict, level: str, seed: int) -> str:
+    sound = IQ_SOUND.get(pet.get('type'), '')
+    if level == 'baby':
+        variants = [
+            f'{sound} Ой, это для меня слишком сложно — я ещё малыш и такого пока не знаю! Обучай меня кнопкой «Обучать», подрасту и обязательно расскажу. А пока спроси что-нибудь попроще!',
+            f'{sound} Хм-м, про такое я пока ничего не знаю — мне ещё рано, я маленький. Потренируй меня, и я стану умнее! Давай лучше поболтаем или поиграем?',
+            f'{sound} Такое мне пока не по зубам, я только учусь! Подрасту — расскажу. А сейчас могу помочь с чем-нибудь простым.',
+        ]
+    else:
+        variants = [
+            f'{sound} Это уже глубокая тема — тут нужен уровень «Гений», а я пока Умный. Обучай меня, и я разберу такое полностью! Могу объяснить попроще — только скажи.',
+            f'{sound} Для такого разбора мне пока не хватает ума: нужен уровень «Гений». Потренируй меня — и вернёмся к этому вопросу!',
+        ]
+    return variants[seed % len(variants)].strip()
+
+
+def iq_refusal(pet: dict, level: str, limit: int, seed: int) -> str:
+    sound = IQ_SOUND.get(pet.get('type'), '')
+    if level == 'baby':
+        variants = [
+            f'{sound} Ой, такой длинный текст мне пока не осилить — я ещё малыш! Потренируй меня кнопкой «Обучать», подрасту и помогу. А пока дай кусочек покороче (до {limit} символов).',
+            f'{sound} Это слишком сложно для малыша вроде меня! Давай я подрасту — обучай меня, — а пока принеси текст покороче, до {limit} символов.',
+            f'{sound} Я пока совсем маленький и столько читать не умею… Обучи меня, и я стану умнее! Сейчас потяну только до {limit} символов.',
+        ]
+    else:
+        variants = [
+            f'{sound} Такой большой текст мне пока тяжеловат. Стану Гением — разберу целиком! А сейчас могу взять кусок до {limit} символов.',
+            f'{sound} Тут нужен уровень «Гений», а я пока Умный. Обучай меня — а сейчас дай текст покороче, до {limit} символов.',
+        ]
+    return variants[seed % len(variants)].strip()
+
+
+def build_system(pet: dict, memory: list, task: bool, voice: bool = False, iq=None) -> str:
     ptype = pet.get('type') if pet.get('type') in PERSONAS else 'cat'
     who, traits = PERSONAS[ptype]
     name = str(pet.get('name') or 'Питомец')[:40]
@@ -626,6 +711,8 @@ def build_system(pet: dict, memory: list, task: bool, voice: bool = False) -> st
     ]
     if task:
         lines.append('Сейчас пользователь просит помочь с текстом: выполни задачу точно, реплики персонажа — не более одной короткой фразы.')
+    if iq is not None:
+        lines.append(iq_rules(iq, iq_level(iq), task))
     if voice:
         lines.append(
             'Это голосовой диалог: твой ответ будет озвучен вслух. Отвечай по-человечески, коротко — 1–3 предложения, не больше 350 символов. '
@@ -738,6 +825,7 @@ def handler(event: dict, context) -> dict:
         return fail(400, 'bad_request', False)
 
     pet = data.get('pet') or {}
+    iq = parse_iq(pet)
     message = str(data.get('message') or '').strip()
     task = data.get('task') or None
     voice = bool(data.get('voice'))
@@ -750,6 +838,21 @@ def handler(event: dict, context) -> dict:
             return fail(400, 'empty', False)
         if len(source) > MAX_SOURCE:
             return fail(413, 'too_long', False, {'limit': MAX_SOURCE})
+        if iq is not None:
+            lvl = iq_level(iq)
+            if len(source) > IQ_TEXT_LIMIT[lvl]:
+                return respond(200, {
+                    'reply': iq_refusal(pet, lvl, IQ_TEXT_LIMIT[lvl], len(source)),
+                    'remember': None,
+                    'truncated': False,
+                    'model': None,
+                    'ownKey': own is not None,
+                    'declined': True,
+                    'iq': int(iq),
+                    'iqLevel': lvl,
+                    'refusedBy': 'length',
+                    'ms': 0,
+                })
         note = f'\n\nДополнительно от пользователя: {message[:500]}' if message else ''
         user_content = f'{TEXT_ACTIONS[action]}{note}\n\nТекст:\n"""\n{source}\n"""'
     else:
@@ -759,6 +862,7 @@ def handler(event: dict, context) -> dict:
             return fail(413, 'too_long', False, {'limit': MAX_MESSAGE})
         user_content = message
 
+    started_all = time.time()
     is_own = own is not None
     try:
         u = usage(client_id, ip, is_own)
@@ -778,7 +882,28 @@ def handler(event: dict, context) -> dict:
         if u['spent'] >= DAILY_BUDGET_RUB:
             return fail(429, 'budget', False)
 
-    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task), voice)}]
+    complexity = None
+    if iq is not None and iq_level(iq) != 'genius':
+        complexity = classify_complexity(message, str(task.get('source') or '') if task else '', own)
+        lvl = iq_level(iq)
+        if complexity > IQ_MAX_COMPLEXITY[lvl]:
+            log(client_id, ip, 'iq_decline', 'ok', 0, 0, 0.0, is_own)
+            return respond(200, {
+                'reply': iq_decline_hard(pet, lvl, int(time.time())),
+                'remember': None,
+                'truncated': False,
+                'model': None,
+                'ownKey': is_own,
+                'declined': True,
+                'iq': int(iq),
+                'iqLevel': lvl,
+                'complexity': complexity,
+                'refusedBy': 'complexity',
+                'remainingToday': None if is_own else max(0, PER_DAY_CLIENT - u['day']),
+                'ms': int((time.time() - started_all) * 1000),
+            })
+
+    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task), voice, iq)}]
     messages += clean_history(data.get('history') or [])
     messages.append({'role': 'user', 'content': user_content})
 
@@ -815,6 +940,8 @@ def handler(event: dict, context) -> dict:
         remember = m.group(1).strip()[:200]
         reply = re.sub(r'\s*<<\s*remember:.*?>>\s*', '', reply, flags=re.IGNORECASE | re.DOTALL)
 
+    declined = False
+    reply = HARD_MARK.sub(' ', reply)
     log(client_id, ip, kind, 'ok', pt, ct, cost, is_own)
     body = {
         'reply': reply.strip(),
@@ -822,6 +949,10 @@ def handler(event: dict, context) -> dict:
         'truncated': choice.get('finish_reason') == 'length',
         'model': result.get('model'),
         'ownKey': is_own,
+        'declined': declined,
+        'complexity': complexity,
+        'iq': int(iq) if iq is not None else None,
+        'iqLevel': iq_level(iq) if iq is not None else None,
         'ms': int((time.time() - started) * 1000),
     }
     if not is_own:

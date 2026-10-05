@@ -4,6 +4,7 @@ import { PROVIDERS, useAiKeyStore } from '@/store/aiKeyStore';
 import { openSettings } from './account/AccountButton';
 import { usePetStore } from '@/store/petStore';
 import Icon from '@/components/ui/icon';
+import { IQ_LEVELS, iqLevel, iqNext } from './iq';
 import { Panel, PanelTitle } from './ui';
 
 function Ring({ value }: { value: number }) {
@@ -44,8 +45,9 @@ export function PetStats() {
     { label: 'Здоровье', value: health, icon: 'HeartPulse', bar: 'from-emerald-400 to-teal-300', glow: 'rgba(52,211,153,0.6)', tone: 'text-emerald-300' },
   ];
 
-  const iqRank =
-    intelligence < 20 ? 'Новичок' : intelligence < 40 ? 'Ученик' : intelligence < 60 ? 'Знаток' : intelligence < 80 ? 'Эксперт' : 'Мастер';
+  const lvl = iqLevel(intelligence);
+  const iqRank = IQ_LEVELS[lvl].name;
+  const next = iqNext(intelligence);
 
   return (
     <Panel>
@@ -84,7 +86,9 @@ export function PetStats() {
           </div>
           <div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-white/40">IQ</div>
-            <div className="text-sm font-extrabold text-white">{iqRank}</div>
+            <div className="text-sm font-extrabold text-white">
+              {iqRank} · {Math.round(intelligence)}
+            </div>
           </div>
         </div>
         <div className="glass-soft flex items-center gap-2.5 p-2.5">
@@ -98,6 +102,27 @@ export function PetStats() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-2 rounded-xl border border-cyan-300/15 bg-cyan-400/[0.05] p-2.5">
+        <div className="flex items-center justify-between text-[11px] font-bold text-cyan-100">
+          <span>Что умеет: {iqRank}</span>
+          {next ? (
+            <span className="text-white/50">
+              до «{IQ_LEVELS[next.level].name}»: {next.need} IQ
+            </span>
+          ) : (
+            <span className="text-emerald-300">максимум</span>
+          )}
+        </div>
+        <ul className="mt-1.5 space-y-0.5 text-[11px] text-white/60">
+          {IQ_LEVELS[lvl].can.map((c) => (
+            <li key={c} className="flex gap-1.5">
+              <Icon name="Check" size={11} className="mt-0.5 shrink-0 text-cyan-300" />
+              {c}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <AiStatusBadge />

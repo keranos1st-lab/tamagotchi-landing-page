@@ -137,6 +137,11 @@ export function MessageBubble({
         <div className="mt-2 flex items-center gap-3">
           {msg.kind === 'legacy' ? (
             <span className="text-[10px] font-semibold text-white/35">Шаблонный ответ из старой версии — не AI</span>
+          ) : msg.declined ? (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-amber-300/80">
+              <Icon name="GraduationCap" size={10} />
+              Нужно подрасти — «Обучать» поднимает IQ
+            </span>
           ) : (
             <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-300/60">
               <Icon name="Sparkles" size={10} />
@@ -144,7 +149,7 @@ export function MessageBubble({
             </span>
           )}
           <CopyBtn text={msg.text} />
-          {!isTask && msg.kind !== 'legacy' && <SpeakBtn text={msg.text} />}
+          {msg.kind !== 'legacy' && <SpeakBtn text={msg.text} />}
         </div>
       </div>
     </div>

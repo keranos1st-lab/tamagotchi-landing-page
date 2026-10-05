@@ -14,6 +14,7 @@ export interface ChatMessage {
   text: string;
   timestamp: number;
   kind?: 'ai' | 'error' | 'legacy' | 'task';
+  declined?: boolean;
   task?: { action: TextAction; source: string };
   error?: { code: string; message: string; retryable: boolean };
   retry?: { message: string; task?: { action: TextAction; source: string } };

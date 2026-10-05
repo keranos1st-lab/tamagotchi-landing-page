@@ -133,8 +133,8 @@ async function askAndSpeak(my: number, text: string) {
     return fail(own || !res.code.startsWith('daily') ? res.message : 'Дневной лимит AI исчерпан');
   }
 
-  usePetStore.getState().addChatMessage('pet', res.reply, { kind: 'ai' });
-  usePetStore.getState().earn('chat', 3);
+  usePetStore.getState().addChatMessage('pet', res.reply, { kind: 'ai', declined: res.declined });
+  usePetStore.getState().earn('chat', res.declined ? 1 : 3);
   useThinkingStore.getState().cheer();
   if (res.remember) mem.propose(res.remember);
 

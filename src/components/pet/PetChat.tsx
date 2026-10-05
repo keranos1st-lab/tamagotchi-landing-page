@@ -84,9 +84,9 @@ export function PetChat() {
       task,
     });
     if (res.ok) {
-      addChatMessage('pet', res.truncated ? `${res.reply}\n\n_(ответ обрезан по длине — попроси продолжить)_` : res.reply, { kind: 'ai', task });
+      addChatMessage('pet', res.truncated ? `${res.reply}\n\n_(ответ обрезан по длине — попроси продолжить)_` : res.reply, { kind: 'ai', task, declined: res.declined });
       if (useVoiceStore.getState().speakReplies && !task) speakText(res.reply);
-      earn(task ? 'help' : 'chat', task ? 6 : 3);
+      earn(task ? 'help' : 'chat', res.declined ? 1 : task ? 6 : 3);
       useThinkingStore.getState().cheer();
       if (res.remember) mem.propose(res.remember);
       if (!res.ownKey && res.remainingToday !== undefined) {

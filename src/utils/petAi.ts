@@ -2,7 +2,7 @@ import func2url from '../../backend/func2url.json';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
 import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
 
-export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number; ownKey?: boolean };
+export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number; ownKey?: boolean; declined?: boolean };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiResult = AiOk | AiErr;
 
@@ -48,7 +48,7 @@ export async function fetchAiStatus(): Promise<AiStatus | null> {
   }
 }
 
-type PetCtx = Pick<PetState, 'name' | 'type' | 'level' | 'stage' | 'hunger' | 'happiness' | 'energy' | 'health'>;
+type PetCtx = Pick<PetState, 'name' | 'type' | 'level' | 'stage' | 'hunger' | 'happiness' | 'energy' | 'health' | 'intelligence'>;
 
 export async function askPet(args: {
   pet: PetCtx;
@@ -81,13 +81,14 @@ export async function askPet(args: {
           type: pet.type,
           level: pet.level,
           stage: pet.stage,
+          iq: Math.round(pet.intelligence),
           stats: { hunger: pet.hunger, happiness: pet.happiness, energy: pet.energy, health: pet.health },
         },
       }),
     });
     const data = await res.json().catch(() => null);
     if (res.ok && data?.reply) {
-      return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday, ownKey: !!data.ownKey };
+      return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday, ownKey: !!data.ownKey, declined: !!data.declined };
     }
     if (data?.error) return { ok: false, code: data.error, message: data.message || 'Ошибка AI', retryable: !!data.retryable };
     if (res.status === 504 || res.status === 502) return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };
