@@ -4,8 +4,8 @@ AI-чат питомца PetAgent через сервис Польза (polza.ai
 память, на которую пользователь дал согласие. Помогает с текстом:
 объяснить, сократить, исправить, помочь ответить. Ограничивает длину,
 частоту запросов и суточный бюджет, ведёт учёт расхода в БД.
-Маршрут ?voice=1 озвучивает ответ питомца через ElevenLabs (ключ и голос — только
-в серверных секретах ELEVENLABS_API_KEY и ELEVENLABS_VOICE_ID).
+Маршрут ?voice=1 озвучивает ответ питомца через Yandex SpeechKit (ключ — только
+в серверном секрете YANDEX_SPEECHKIT_API_KEY).
 Пользователь может передать свой ключ (X-User-Ai-Key) к Польза, OpenAI,
 OpenRouter или DeepSeek — тогда запрос идёт за его счёт, ключ не сохраняется.
 """
@@ -76,12 +76,9 @@ VOICE_MAX_CHARS = 450
 VOICE_PER_MINUTE = 6
 VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
 VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
-VOICE_MODEL = os.environ.get('ELEVENLABS_MODEL') or 'eleven_multilingual_v2'
-ELEVEN_BASE = (os.environ.get('ELEVENLABS_BASE_URL') or 'https://api.elevenlabs.io').strip().rstrip('/')
 YANDEX_DEFAULT_VOICE = 'alena'
 YANDEX_VOICE_RE = re.compile(r'^[a-z_]{3,30}$')
 YANDEX_EMOTION_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus'}
-VOICE_ID_RE = re.compile(r'^[A-Za-z0-9]{10,40}$')
 OWN_PER_MINUTE = 20
 OWN_PER_DAY = 500
 
@@ -90,16 +87,8 @@ ERRORS = {
     'yandex_no_permission': 'У ключа Yandex нет доступа к синтезу речи — сервисному аккаунту нужна роль ai.speechkit-tts.user',
     'yandex_quota': 'Лимит Yandex SpeechKit исчерпан или превышена частота запросов',
     'yandex_bad_request': 'Yandex SpeechKit отклонил запрос — проверьте голос в YANDEX_SPEECHKIT_VOICE',
-    'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_API_KEY',
-    'voice_no_voice': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_VOICE_ID',
-    'voice_bad_voice': 'Идентификатор голоса в ELEVENLABS_VOICE_ID некорректен',
-    'voice_region': 'ElevenLabs не принимает запросы с российских серверов, на которых работает функция. Нужен посредник за пределами России (секрет ELEVENLABS_BASE_URL)',
-    'voice_bad_key': 'ElevenLabs не принял ключ API — проверьте ELEVENLABS_API_KEY',
-    'voice_no_permission': 'У ключа ElevenLabs нет права на синтез речи (Text to Speech) — включите его в настройках ключа',
-    'voice_not_found': 'Выбранный голос недоступен для этого ключа ElevenLabs',
-    'voice_quota': 'Лимит символов или баланс ElevenLabs исчерпан',
-    'voice_busy': 'ElevenLabs временно перегружен',
-    'voice_error': 'ElevenLabs временно недоступен',
+    'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета YANDEX_SPEECHKIT_API_KEY',
+    'voice_error': 'Yandex SpeechKit временно недоступен',
     'voice_empty_text': 'Нечего озвучивать',
     'voice_too_long': 'Текст для озвучивания слишком длинный',
     'voice_rate': 'Слишком много голосовых запросов — подождите минуту',
@@ -217,10 +206,6 @@ class VoiceError(Exception):
         self.retryable = retryable
 
 
-def eleven_config() -> tuple:
-    return (os.environ.get('ELEVENLABS_API_KEY') or '').strip(), (os.environ.get('ELEVENLABS_VOICE_ID') or '').strip()
-
-
 def yandex_config() -> tuple:
     key = (os.environ.get('YANDEX_SPEECHKIT_API_KEY') or '').strip()
     voice = (os.environ.get('YANDEX_SPEECHKIT_VOICE') or '').strip() or YANDEX_DEFAULT_VOICE
@@ -229,30 +214,18 @@ def yandex_config() -> tuple:
 
 
 def providers() -> list:
-    order = []
-    ykey, yvoice, _ = yandex_config()
-    ekey, evoice = eleven_config()
-    if ykey and YANDEX_VOICE_RE.match(yvoice):
-        order.append('yandex')
-    if ekey and evoice and VOICE_ID_RE.match(evoice):
-        order.append('elevenlabs')
-    pref = (os.environ.get('VOICE_PROVIDER') or '').strip().lower()
-    if pref in order:
-        order.remove(pref)
-        order.insert(0, pref)
-    return order
+    key, voice, _ = yandex_config()
+    return ['yandex'] if key and YANDEX_VOICE_RE.match(voice) else []
 
 
 def voice_status() -> dict:
-    ykey, yvoice, _ = yandex_config()
-    ekey, evoice = eleven_config()
-    order = providers()
+    key, voice, _ = yandex_config()
     return {
         'voice': {
-            'configured': bool(order),
-            'providers': order,
-            'yandex': {'hasKey': bool(ykey), 'voice': yvoice},
-            'elevenlabs': {'hasKey': bool(ekey), 'hasVoiceId': bool(evoice), 'model': VOICE_MODEL, 'viaRelay': ELEVEN_BASE != 'https://api.elevenlabs.io'},
+            'configured': bool(providers()),
+            'provider': 'yandex',
+            'hasKey': bool(key),
+            'voice': voice,
             'maxChars': VOICE_MAX_CHARS,
             'perMinute': VOICE_PER_MINUTE,
             'perDay': VOICE_PER_DAY,
@@ -303,55 +276,6 @@ def synth_yandex(text: str) -> dict:
     return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1'}
 
 
-def synth_eleven(text: str) -> dict:
-    key, voice = eleven_config()
-    payload = json.dumps({
-        'text': text,
-        'model_id': VOICE_MODEL,
-        'language_code': 'ru',
-        'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75, 'style': 0.2, 'use_speaker_boost': True},
-    }).encode('utf-8')
-    req = urllib.request.Request(
-        f'{ELEVEN_BASE}/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
-        data=payload,
-        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg', 'User-Agent': 'PetAgent/1.0 (+https://petagent.app)'},
-        method='POST',
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            audio = resp.read()
-            ctype = (resp.headers.get('Content-Type') or '').lower()
-    except urllib.error.HTTPError as e:
-        raw_detail = e.read().decode('utf-8', 'ignore')[:3000]
-        detail = raw_detail.lower()
-        if '<html' in detail or 'sanctioned countr' in detail or 'restrict access' in detail:
-            print(f'ElevenLabs HTTP {e.code}: региональная блокировка')
-            raise VoiceError('voice_region')
-        print(f'ElevenLabs HTTP {e.code}')
-        if 'missing_permissions' in detail:
-            raise VoiceError('voice_no_permission')
-        if e.code in (401, 403) and 'quota' not in detail:
-            raise VoiceError('voice_bad_key')
-        if e.code == 404 or 'voice_not_found' in detail or 'not found' in detail or (e.code == 400 and 'paid_plan' in detail):
-            raise VoiceError('voice_not_found')
-        if e.code == 402 or 'quota' in detail or 'character' in detail:
-            raise VoiceError('voice_quota')
-        if e.code == 429:
-            raise VoiceError('voice_busy', True)
-        raise VoiceError('voice_error', True)
-    except Exception as e:
-        print(f'ElevenLabs error: {type(e).__name__}')
-        raise VoiceError('voice_error', True)
-    head = audio[:300].lstrip().lower()
-    if head.startswith(b'<') or b'<html' in head:
-        print('ElevenLabs: вместо звука пришла HTML-страница')
-        raise VoiceError('voice_region')
-    if not looks_like_mp3(audio) or len(audio) < 500 or ('audio' not in ctype and 'octet-stream' not in ctype):
-        print(f'ElevenLabs: неожиданный ответ ctype={ctype!r} size={len(audio)}')
-        raise VoiceError('voice_error', True)
-    return {'audio': audio, 'voice': voice, 'model': VOICE_MODEL}
-
-
 def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
         return respond(200, voice_status())
@@ -359,11 +283,8 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
         return fail(405, 'bad_request', False)
     order = providers()
     if not order:
-        ykey, _, _ = yandex_config()
-        ekey, evoice = eleven_config()
-        if not ykey and not ekey:
-            return fail(503, 'voice_no_key', False, {'fallback': 'local'})
-        return fail(503, 'voice_bad_voice' if (ekey and evoice) else 'voice_no_voice', False, {'fallback': 'local'})
+        key, _, _ = yandex_config()
+        return fail(503, 'voice_no_key' if not key else 'yandex_bad_request', False, {'fallback': 'local'})
     try:
         data = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
@@ -389,7 +310,7 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     errors = []
     for name in order:
         try:
-            res = synth_yandex(text) if name == 'yandex' else synth_eleven(text)
+            res = synth_yandex(text)
         except VoiceError as e:
             errors.append({'provider': name, 'error': e.code})
             log(client_id, ip, 'voice', e.code)
@@ -407,7 +328,7 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
             'skipped': errors,
         })
     last = errors[-1]['error']
-    return fail(502, last, last in ('voice_busy', 'voice_error', 'yandex_quota'), {'fallback': 'local', 'providers': errors})
+    return fail(502, last, last in ('voice_error', 'yandex_quota'), {'fallback': 'local', 'providers': errors})
 
 
 def mood_line(stats: dict) -> str:
