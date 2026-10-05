@@ -1,5 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { useVoiceStore, STATUS_LABEL } from '@/store/voiceStore';
+import { cancelVoice, toggleVoice } from '@/utils/voiceDialog';
 
 export function VoiceBubble({ below = false }: { below?: boolean }) {
   const status = useVoiceStore((s) => s.status);
@@ -36,6 +37,26 @@ export function VoiceBubble({ below = false }: { below?: boolean }) {
       {text && (
         <div className={`max-h-24 overflow-y-auto text-xs font-semibold leading-snug ${status === 'transcribing' || status === 'thinking' ? 'text-slate-500' : ''}`}>
           {status === 'thinking' || status === 'transcribing' ? `«${text}»` : text}
+        </div>
+      )}
+      {(status === 'listening' || status === 'transcribing' || status === 'thinking') && (
+        <div className="mt-2 flex gap-1.5">
+          {status === 'listening' && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={toggleVoice}
+              className="flex-1 rounded-full bg-pink-500 px-2.5 py-1 text-[11px] font-extrabold text-white hover:bg-pink-600"
+            >
+              Готово
+            </button>
+          )}
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={cancelVoice}
+            className="flex-1 rounded-full border border-slate-300 px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-100"
+          >
+            Отмена
+          </button>
         </div>
       )}
       <span className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 ${isNote ? 'bg-amber-50' : 'bg-white'} ${below ? '-top-1' : '-bottom-1'}`} />

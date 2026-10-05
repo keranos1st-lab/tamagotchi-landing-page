@@ -77,8 +77,9 @@ VOICE_MAX_CHARS = 450
 VOICE_PER_MINUTE = 6
 VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
 VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
-STT_RATES = (8000, 16000, 48000)
-STT_MAX_SECONDS = 25
+STT_RATE = 16000
+STT_MAX_BYTES = 1024 * 1024
+STT_MAX_SECONDS = 30
 STT_MIN_SECONDS = 0.4
 STT_PER_MINUTE = 8
 STT_PER_DAY = int(os.environ.get('PET_STT_DAILY_PER_USER') or 120)
@@ -101,7 +102,8 @@ ERRORS = {
     'yandex_bad_request': 'Yandex SpeechKit отклонил запрос — проверьте голос в YANDEX_SPEECHKIT_VOICE',
     'stt_bad_audio': 'Не удалось прочитать запись голоса',
     'stt_too_short': 'Слишком короткая запись — скажите фразу подлиннее',
-    'stt_too_long': 'Слишком длинная запись — говорите до 25 секунд',
+    'stt_too_long': 'Слишком длинная запись — говорите не дольше 30 секунд',
+    'stt_too_big': 'Запись слишком большая (больше 1 МБ)',
     'stt_no_speech': 'Речь не распознана — попробуйте сказать ещё раз',
     'stt_no_permission': 'У ключа Yandex нет права на распознавание речи — сервисному аккаунту нужна роль ai.speechkit-stt.user',
     'stt_rate': 'Слишком много голосовых запросов — подождите минуту',
@@ -415,24 +417,32 @@ def synth_yandex(text: str) -> dict:
 def handle_stt(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
         key, _, _ = yandex_config()
-        return respond(200, {'stt': {'configured': bool(key), 'maxSeconds': STT_MAX_SECONDS, 'rates': list(STT_RATES), 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
+        return respond(200, {'stt': {'configured': bool(key), 'maxSeconds': STT_MAX_SECONDS, 'rate': STT_RATE, 'maxBytes': STT_MAX_BYTES, 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
     if event.get('httpMethod') != 'POST':
         return fail(405, 'bad_request', False)
-    key, _, folder = yandex_config()
+    key, _, _ = yandex_config()
     if not key:
         return fail(503, 'voice_no_key', False)
+    raw_body = event.get('body') or ''
+    if len(raw_body) > STT_MAX_BYTES * 4 // 3 + 4096:
+        return fail(413, 'stt_too_big', False)
     try:
-        data = json.loads(event.get('body') or '{}')
-        rate = int(data.get('rate') or 16000)
-        pcm = base64.b64decode(str(data.get('audio') or ''), validate=True)
+        data = json.loads(raw_body or '{}')
+        rate = int(data.get('rate') or STT_RATE)
+        b64 = str(data.get('audio') or '')
+        if len(b64) > STT_MAX_BYTES * 4 // 3 + 8:
+            return fail(413, 'stt_too_big', False)
+        pcm = base64.b64decode(b64, validate=True)
     except Exception:
         return fail(400, 'stt_bad_audio', False)
-    if rate not in STT_RATES or len(pcm) % 2:
+    if rate != STT_RATE or len(pcm) % 2 or pcm[:4] in (b'RIFF', b'OggS') or pcm[:4] == b'\x1aE\xdf\xa3':
         return fail(400, 'stt_bad_audio', False)
-    seconds = len(pcm) / (rate * 2)
+    if len(pcm) > STT_MAX_BYTES:
+        return fail(413, 'stt_too_big', False)
+    seconds = len(pcm) / (STT_RATE * 2)
     if seconds < STT_MIN_SECONDS:
         return fail(400, 'stt_too_short', False)
-    if seconds > STT_MAX_SECONDS + 1:
+    if seconds > STT_MAX_SECONDS + 0.5:
         return fail(413, 'stt_too_long', False)
 
     try:
@@ -445,14 +455,11 @@ def handle_stt(event: dict, client_id: str, ip: str) -> dict:
     if u['day'] >= STT_PER_DAY or u['day_ip'] >= STT_PER_DAY_IP:
         return fail(429, 'stt_daily', False)
 
-    query = {'lang': 'ru-RU', 'format': 'lpcm', 'sampleRateHertz': str(rate), 'topic': 'general'}
-    if folder:
-        query['folderId'] = folder
-    auth = f'Bearer {key}' if key.startswith('t1.') else f'Api-Key {key}'
+    query = {'lang': 'ru-RU', 'topic': 'general', 'format': 'lpcm', 'sampleRateHertz': str(STT_RATE)}
     req = urllib.request.Request(
         'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?' + urllib.parse.urlencode(query),
         data=pcm,
-        headers={'Authorization': auth, 'Content-Type': 'application/octet-stream'},
+        headers={'Authorization': f'Api-Key {key}', 'Content-Type': 'application/octet-stream'},
         method='POST',
     )
     started = time.time()
@@ -461,7 +468,7 @@ def handle_stt(event: dict, client_id: str, ip: str) -> dict:
             result = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
     except urllib.error.HTTPError as e:
         detail = e.read().decode('utf-8', 'ignore')[:400].lower()
-        print(f'Yandex STT HTTP {e.code}')
+        print(f'Yandex STT HTTP {e.code}: {detail[:160]}')
         if e.code == 403 or 'permission' in detail:
             code = 'stt_no_permission'
         elif e.code == 401:

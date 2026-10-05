@@ -45,7 +45,52 @@
       "path": "/?stt=1",
       "expectedStatus": 200,
       "expectedBody": {
-        "stt": {}
+        "stt": {
+          "rate": 16000,
+          "maxSeconds": 30
+        }
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "STT empty audio",
+      "method": "POST",
+      "path": "/?stt=1",
+      "body": {
+        "audio": "",
+        "rate": 16000
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "stt_too_short"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "STT wrong rate",
+      "method": "POST",
+      "path": "/?stt=1",
+      "body": {
+        "audio": "AAAA",
+        "rate": 44100
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "stt_bad_audio"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "STT not base64",
+      "method": "POST",
+      "path": "/?stt=1",
+      "body": {
+        "audio": "!!!",
+        "rate": 16000
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "stt_bad_audio"
       },
       "bodyMatcher": "partial"
     }

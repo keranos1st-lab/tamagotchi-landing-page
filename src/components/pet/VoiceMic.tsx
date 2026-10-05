@@ -1,6 +1,6 @@
 import Icon from '@/components/ui/icon';
 import { useVoiceStore, STATUS_LABEL } from '@/store/voiceStore';
-import { toggleVoice } from '@/utils/voiceDialog';
+import { cancelVoice, toggleVoice } from '@/utils/voiceDialog';
 
 export function VoiceMic({ className = '', size = 18, disabled = false }: { className?: string; size?: number; disabled?: boolean }) {
   const status = useVoiceStore((s) => s.status);
@@ -36,6 +36,11 @@ export function VoiceStatusLine({ className = '' }: { className?: string }) {
         <>
           <b>{STATUS_LABEL[status]}</b>
           {heard && status !== 'listening' && <span className="text-white/55"> «{heard.length > 80 ? `${heard.slice(0, 80)}…` : heard}»</span>}
+          {status !== 'speaking' && (
+            <button onClick={cancelVoice} className="ml-2 font-bold text-rose-200 underline-offset-2 hover:underline">
+              Отмена
+            </button>
+          )}
         </>
       ) : (
         note

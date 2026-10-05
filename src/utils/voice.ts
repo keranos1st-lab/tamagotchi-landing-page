@@ -3,7 +3,9 @@ import { clientId } from './petAi';
 
 const URL = (func2url as Record<string, string>)['pet-chat'];
 const TARGET_RATE = 16000;
-const MAX_SECONDS = 24;
+export const MAX_SECONDS = 30;
+export const MAX_BYTES = 1024 * 1024;
+const NO_SPEECH_MS = 8000;
 
 export type VoiceFail = { ok: false; code: string; message: string; retryable: boolean };
 
@@ -49,7 +51,6 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
   const chunks: Float32Array[] = [];
   const startedAt = performance.now();
   let heardSpeech = false;
-  let lastVoice = performance.now();
   let noise = 0.004;
   let closed = false;
   let autoFired = false;
@@ -72,13 +73,11 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
     const threshold = Math.max(0.012, noise * 3);
     if (rms > threshold) {
       heardSpeech = true;
-      lastVoice = now;
     }
     hooks.onLevel?.(Math.min(1, rms * 12));
     const elapsed = now - startedAt;
-    if (heardSpeech && now - lastVoice > 1500 && elapsed > 1200) fireAuto();
-    else if (!heardSpeech && elapsed > 8000) fireAuto();
-    else if (elapsed > MAX_SECONDS * 1000) fireAuto();
+    if (!heardSpeech && elapsed > NO_SPEECH_MS) fireAuto();
+    else if (elapsed >= MAX_SECONDS * 1000) fireAuto();
   };
 
   source.connect(proc);
@@ -125,69 +124,6 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
   };
 }
 
-type RecognitionLike = {
-  lang: string;
-  continuous: boolean;
-  interimResults: boolean;
-  maxAlternatives: number;
-  onresult: ((e: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
-  onerror: ((e: { error: string }) => void) | null;
-  onend: (() => void) | null;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-};
-
-function recognitionCtor(): (new () => RecognitionLike) | null {
-  const w = window as unknown as { SpeechRecognition?: new () => RecognitionLike; webkitSpeechRecognition?: new () => RecognitionLike };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
-
-export const nativeSupported = () => !!recognitionCtor();
-
-export type NativeEnd = { text: string; error?: string };
-
-export function startNativeRecognition(hooks: { onInterim: (text: string) => void; onEnd: (r: NativeEnd) => void }): { stop: () => void; cancel: () => void } {
-  const Ctor = recognitionCtor();
-  if (!Ctor) throw new Error('unsupported');
-  const r = new Ctor();
-  r.lang = 'ru-RU';
-  r.continuous = false;
-  r.interimResults = true;
-  r.maxAlternatives = 1;
-  let text = '';
-  let error: string | undefined;
-  let done = false;
-  const finish = () => {
-    if (done) return;
-    done = true;
-    hooks.onEnd({ text: text.trim(), error });
-  };
-  r.onresult = (e) => {
-    let t = '';
-    for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
-    text = t;
-    hooks.onInterim(t);
-  };
-  r.onerror = (e) => {
-    if (e.error !== 'aborted') error = e.error;
-  };
-  r.onend = finish;
-  r.start();
-  return {
-    stop: () => r.stop(),
-    cancel: () => {
-      done = true;
-      r.onresult = r.onerror = r.onend = null;
-      try {
-        r.abort();
-      } catch {
-        /* уже остановлено */
-      }
-    },
-  };
-}
-
 function toBase64(bytes: Uint8Array): string {
   let bin = '';
   const step = 0x8000;
@@ -196,6 +132,7 @@ function toBase64(bytes: Uint8Array): string {
 }
 
 export async function transcribe(pcm: Int16Array): Promise<{ ok: true; text: string } | VoiceFail> {
+  if (pcm.byteLength > MAX_BYTES) return { ok: false, code: 'stt_too_big', message: 'Запись слишком большая — говорите не дольше 30 секунд', retryable: false };
   if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);

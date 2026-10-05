@@ -5,10 +5,9 @@ import { useVoiceStore } from '@/store/voiceStore';
 import { useAiKeyStore } from '@/store/aiKeyStore';
 import { track } from '@/store/achievementStore';
 import { askPet } from './petAi';
-import { nativeSupported, speak, startNativeRecognition, startRecording, stopSpeaking, transcribe, type NativeEnd, type Recording } from './voice';
+import { speak, startRecording, stopSpeaking, transcribe, type Recording } from './voice';
 
 let rec: Recording | null = null;
-let native: { stop: () => void; cancel: () => void } | null = null;
 let turn = 0;
 
 const vs = () => useVoiceStore.getState();
@@ -21,6 +20,25 @@ function fail(note: string) {
   }, 6000);
 }
 
+function sttMessage(code: string, message: string): string {
+  switch (code) {
+    case 'stt_no_speech':
+      return 'Речь не распознана — попробуй ещё раз';
+    case 'network':
+      return 'Нет связи с сервером — проверь интернет и попробуй ещё раз';
+    case 'yandex_bad_key':
+      return 'Ключ Yandex SpeechKit недействителен — проверь секрет YANDEX_SPEECHKIT_API_KEY';
+    case 'stt_no_permission':
+      return 'У ключа Yandex нет права на распознавание речи (нужна роль ai.speechkit-stt.user)';
+    case 'yandex_quota':
+    case 'stt_rate':
+    case 'stt_daily':
+      return message;
+    default:
+      return message || 'Не удалось распознать речь';
+  }
+}
+
 export function voiceBusy() {
   return vs().status !== 'idle';
 }
@@ -29,8 +47,6 @@ export function cancelVoice() {
   turn++;
   rec?.cancel();
   rec = null;
-  native?.cancel();
-  native = null;
   stopSpeaking();
   useThinkingStore.getState().setThinking(false);
   vs().set({ status: 'idle', level: 0 });
@@ -43,40 +59,9 @@ export async function toggleVoice() {
   return startListening();
 }
 
-const NATIVE_ERRORS: Record<string, string> = {
-  'not-allowed': 'Нет доступа к микрофону — разрешите его в настройках браузера',
-  'service-not-allowed': 'Нет доступа к микрофону — разрешите его в настройках браузера',
-  'audio-capture': 'Микрофон не найден',
-  'no-speech': 'Я ничего не услышал — нажми на микрофон и скажи ещё раз',
-};
-
-function onNativeEnd(my: number, r: NativeEnd) {
-  native = null;
-  if (turn !== my) return;
-  if (!r.text) {
-    if (r.error === 'network' || r.error === 'language-not-supported') {
-      vs().set({ note: null });
-      return startRecorder(my);
-    }
-    return fail((r.error && NATIVE_ERRORS[r.error]) || 'Речь не распознана — попробуй ещё раз');
-  }
-  return askAndSpeak(my, r.text);
-}
-
 async function startListening() {
   const my = ++turn;
   vs().set({ status: 'listening', heard: '', reply: '', note: null, level: 0 });
-  if (nativeSupported()) {
-    try {
-      native = startNativeRecognition({
-        onInterim: (heard) => turn === my && vs().set({ heard }),
-        onEnd: (r) => onNativeEnd(my, r),
-      });
-      return;
-    } catch {
-      native = null;
-    }
-  }
   return startRecorder(my);
 }
 
@@ -105,10 +90,6 @@ async function startRecorder(my: number) {
 
 async function finishListening() {
   const my = turn;
-  if (native) {
-    native.stop();
-    return;
-  }
   const r = rec;
   rec = null;
   if (!r) return;
@@ -118,7 +99,8 @@ async function finishListening() {
   vs().set({ status: 'transcribing', level: 0 });
   const heard = await transcribe(pcm);
   if (turn !== my) return;
-  if (!heard.ok) return fail(heard.code === 'stt_no_speech' ? 'Речь не распознана — попробуй ещё раз' : heard.message);
+  if (!heard.ok) return fail(sttMessage(heard.code, heard.message));
+  if (!heard.text.trim()) return fail('Речь не распознана — попробуй ещё раз');
 
   return askAndSpeak(my, heard.text.trim());
 }
@@ -182,4 +164,16 @@ export async function speakText(text: string) {
     note: said.ok ? (said.via === 'local' ? `Голос Yandex недоступен (${said.reason}) — говорю голосом системы` : null) : `Не удалось озвучить: ${said.reason}`,
   });
   if (vs().note) setTimeout(() => vs().set({ note: null }), 7000);
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && vs().status !== 'idle') cancelVoice();
+  });
+  window.addEventListener('pagehide', () => {
+    if (vs().status === 'listening') cancelVoice();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && vs().status === 'listening') cancelVoice();
+  });
 }
