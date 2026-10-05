@@ -4,9 +4,12 @@ AI-чат питомца PetAgent через сервис Польза (polza.ai
 память, на которую пользователь дал согласие. Помогает с текстом:
 объяснить, сократить, исправить, помочь ответить. Ограничивает длину,
 частоту запросов и суточный бюджет, ведёт учёт расхода в БД.
+Маршрут ?voice=1 озвучивает ответ питомца через ElevenLabs (ключ и голос — только
+в серверных секретах ELEVENLABS_API_KEY и ELEVENLABS_VOICE_ID).
 Пользователь может передать свой ключ (X-User-Ai-Key) к Польза, OpenAI,
 OpenRouter или DeepSeek — тогда запрос идёт за его счёт, ключ не сохраняется.
 """
+import base64
 import json
 import os
 import re
@@ -68,10 +71,28 @@ PROVIDERS = {
     'openrouter': ('https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
     'deepseek': ('https://api.deepseek.com/chat/completions', 'deepseek-chat'),
 }
+VOICE_MAX_CHARS = 450
+VOICE_PER_MINUTE = 6
+VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
+VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
+VOICE_MODEL = os.environ.get('ELEVENLABS_MODEL') or 'eleven_multilingual_v2'
+VOICE_ID_RE = re.compile(r'^[A-Za-z0-9]{10,40}$')
 OWN_PER_MINUTE = 20
 OWN_PER_DAY = 500
 
 ERRORS = {
+    'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_API_KEY',
+    'voice_no_voice': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_VOICE_ID',
+    'voice_bad_voice': 'Идентификатор голоса в ELEVENLABS_VOICE_ID некорректен',
+    'voice_bad_key': 'ElevenLabs не принял ключ API — проверьте ELEVENLABS_API_KEY',
+    'voice_not_found': 'Выбранный голос недоступен для этого ключа ElevenLabs',
+    'voice_quota': 'Лимит символов или баланс ElevenLabs исчерпан',
+    'voice_busy': 'ElevenLabs временно перегружен',
+    'voice_error': 'ElevenLabs временно недоступен',
+    'voice_empty_text': 'Нечего озвучивать',
+    'voice_too_long': 'Текст для озвучивания слишком длинный',
+    'voice_rate': 'Слишком много голосовых запросов — подождите минуту',
+    'voice_daily': 'Дневной лимит озвучивания исчерпан',
     'no_key': 'Не настроен ключ AI (секрет POLZA_AI_API_KEY)',
     'bad_key': 'Ключ AI недействителен',
     'own_bad_key': 'Ваш ключ отклонён сервисом — проверьте его в настройках AI',
@@ -120,10 +141,10 @@ def usage(client_id: str, ip: str, own: bool = False) -> dict:
         k = 'TRUE' if own else 'FALSE'
         cur.execute(
             f"SELECT "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND created_at > NOW() - INTERVAL '1 minute'), "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND own_key = {k} AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COALESCE(SUM(cost) FILTER (WHERE own_key = FALSE AND created_at > date_trunc('day', NOW())), 0) "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind <> 'voice' AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind <> 'voice' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND own_key = {k} AND kind <> 'voice' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COALESCE(SUM(cost) FILTER (WHERE own_key = FALSE AND kind <> 'voice' AND created_at > date_trunc('day', NOW())), 0) "
             f"FROM {SCHEMA}.ai_requests WHERE created_at > date_trunc('day', NOW()) - INTERVAL '1 minute'"
         )
         m, d, dip, spent = cur.fetchone()
@@ -143,6 +164,146 @@ def log(client_id: str, ip: str, kind: str, status: str, pt: int = 0, ct: int = 
         conn.commit()
     finally:
         conn.close()
+
+
+def voice_usage(client_id: str, ip: str) -> dict:
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND status = 'ok'), "
+            f"COALESCE(SUM(prompt_tokens) FILTER (WHERE client_id = '{esc(client_id)}' AND status = 'ok'), 0), "
+            f"COALESCE(SUM(prompt_tokens) FILTER (WHERE ip = '{esc(ip)}' AND status = 'ok'), 0) "
+            f"FROM {SCHEMA}.ai_requests WHERE kind = 'voice' AND created_at > date_trunc('day', NOW()) - INTERVAL '1 minute'"
+        )
+        m, d, chars, chars_ip = cur.fetchone()
+        return {'minute': int(m), 'day': int(d), 'chars': int(chars), 'chars_ip': int(chars_ip)}
+    finally:
+        conn.close()
+
+
+def clean_for_speech(text: str) -> str:
+    t = re.sub(r'```.*?```', ' ', text, flags=re.S)
+    t = re.sub(r'`([^`]*)`', r'\1', t)
+    t = re.sub(r'!?\[([^\]]*)\]\([^)]*\)', r'\1', t)
+    t = re.sub(r'https?://\S+', ' ', t)
+    t = re.sub(r'[*_#>~|]+', ' ', t)
+    t = re.sub(r'^\s*[-•]\s+', '', t, flags=re.M)
+    t = re.sub(r'[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F]', '', t)
+    t = re.sub(r'\s+', ' ', t).strip()
+    if len(t) > VOICE_MAX_CHARS:
+        cut = t[:VOICE_MAX_CHARS]
+        end = max(cut.rfind('. '), cut.rfind('! '), cut.rfind('? '))
+        t = cut[: end + 1] if end > VOICE_MAX_CHARS * 0.5 else cut
+    return t.strip()
+
+
+def voice_config() -> tuple:
+    key = (os.environ.get('ELEVENLABS_API_KEY') or '').strip()
+    voice = (os.environ.get('ELEVENLABS_VOICE_ID') or '').strip()
+    return key, voice
+
+
+def voice_status() -> dict:
+    key, voice = voice_config()
+    return {
+        'voice': {
+            'configured': bool(key and voice and VOICE_ID_RE.match(voice)),
+            'hasKey': bool(key),
+            'hasVoiceId': bool(voice),
+            'model': VOICE_MODEL,
+            'maxChars': VOICE_MAX_CHARS,
+            'perMinute': VOICE_PER_MINUTE,
+            'perDay': VOICE_PER_DAY,
+        }
+    }
+
+
+def handle_voice(event: dict, client_id: str, ip: str) -> dict:
+    if event.get('httpMethod') == 'GET':
+        return respond(200, voice_status())
+    if event.get('httpMethod') != 'POST':
+        return fail(405, 'bad_request', False)
+    key, voice = voice_config()
+    if not key:
+        return fail(503, 'voice_no_key', False, {'fallback': 'local'})
+    if not voice:
+        return fail(503, 'voice_no_voice', False, {'fallback': 'local'})
+    if not VOICE_ID_RE.match(voice):
+        return fail(503, 'voice_bad_voice', False, {'fallback': 'local'})
+    try:
+        data = json.loads(event.get('body') or '{}')
+    except json.JSONDecodeError:
+        return fail(400, 'bad_request', False)
+    raw = str(data.get('text') or '')
+    if len(raw) > 4000:
+        return fail(413, 'voice_too_long', False)
+    text = clean_for_speech(raw)
+    if not text:
+        return fail(400, 'voice_empty_text', False)
+
+    try:
+        u = voice_usage(client_id, ip)
+    except Exception as e:
+        print(f'voice usage db error: {type(e).__name__}')
+        return fail(503, 'db_error', True, {'fallback': 'local'})
+    if u['minute'] >= VOICE_PER_MINUTE:
+        return fail(429, 'voice_rate', True, {'retryAfter': 60, 'fallback': 'local'})
+    if u['day'] >= VOICE_PER_DAY or u['chars'] + len(text) > VOICE_CHARS_PER_DAY or u['chars_ip'] + len(text) > VOICE_CHARS_PER_DAY * 3:
+        return fail(429, 'voice_daily', False, {'fallback': 'local'})
+
+    payload = json.dumps({
+        'text': text,
+        'model_id': VOICE_MODEL,
+        'language_code': 'ru',
+        'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75, 'style': 0.2, 'use_speaker_boost': True},
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        f'https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
+        data=payload,
+        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg'},
+        method='POST',
+    )
+    started = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            audio = resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:400].lower()
+        print(f'ElevenLabs HTTP {e.code}')
+        if e.code in (401, 403) and 'quota' not in detail:
+            code = 'voice_bad_key'
+        elif e.code == 404 or 'voice_not_found' in detail or 'not found' in detail:
+            code = 'voice_not_found'
+        elif e.code == 402 or 'quota' in detail or 'character' in detail:
+            code = 'voice_quota'
+        elif e.code == 429:
+            code = 'voice_busy'
+        elif e.code == 400 and 'paid_plan' in detail:
+            code = 'voice_not_found'
+        else:
+            code = 'voice_error'
+        log(client_id, ip, 'voice', code)
+        return fail(502, code, code in ('voice_busy', 'voice_error'), {'fallback': 'local'})
+    except Exception as e:
+        print(f'ElevenLabs error: {type(e).__name__}')
+        log(client_id, ip, 'voice', 'timeout')
+        return fail(504, 'voice_error', True, {'fallback': 'local'})
+
+    if len(audio) < 500:
+        log(client_id, ip, 'voice', 'empty_audio')
+        return fail(502, 'voice_error', True, {'fallback': 'local'})
+    log(client_id, ip, 'voice', 'ok', pt=len(text), ct=len(audio) // 1000)
+    return respond(200, {
+        'audio': base64.b64encode(audio).decode('ascii'),
+        'mime': 'audio/mpeg',
+        'chars': len(text),
+        'voiceId': voice,
+        'model': VOICE_MODEL,
+        'ms': int((time.time() - started) * 1000),
+    })
 
 
 def mood_line(stats: dict) -> str:
@@ -257,6 +418,9 @@ def handler(event: dict, context) -> dict:
     headers = {k.lower(): v for k, v in (event.get('headers') or {}).items()}
     client_id = re.sub(r'[^a-zA-Z0-9_-]', '', headers.get('x-client-id') or '')[:64] or 'anon'
     ip = ((event.get('requestContext') or {}).get('identity') or {}).get('sourceIp') or ''
+
+    if (event.get('queryStringParameters') or {}).get('voice'):
+        return handle_voice(event, client_id, ip)
 
     own = None
     user_key = (headers.get('x-user-ai-key') or '').strip()

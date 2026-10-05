@@ -28,6 +28,16 @@
         "error": "empty"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Voice status",
+      "method": "GET",
+      "path": "/?voice=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "voice": {}
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }
