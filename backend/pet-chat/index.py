@@ -15,6 +15,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import psycopg2
@@ -77,11 +78,18 @@ VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
 VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
 VOICE_MODEL = os.environ.get('ELEVENLABS_MODEL') or 'eleven_multilingual_v2'
 ELEVEN_BASE = (os.environ.get('ELEVENLABS_BASE_URL') or 'https://api.elevenlabs.io').strip().rstrip('/')
+YANDEX_DEFAULT_VOICE = 'alena'
+YANDEX_VOICE_RE = re.compile(r'^[a-z_]{3,30}$')
+YANDEX_EMOTION_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus'}
 VOICE_ID_RE = re.compile(r'^[A-Za-z0-9]{10,40}$')
 OWN_PER_MINUTE = 20
 OWN_PER_DAY = 500
 
 ERRORS = {
+    'yandex_bad_key': 'Yandex SpeechKit не принял ключ — проверьте YANDEX_SPEECHKIT_API_KEY',
+    'yandex_no_permission': 'У ключа Yandex нет доступа к синтезу речи — сервисному аккаунту нужна роль ai.speechkit-tts.user',
+    'yandex_quota': 'Лимит Yandex SpeechKit исчерпан или превышена частота запросов',
+    'yandex_bad_request': 'Yandex SpeechKit отклонил запрос — проверьте голос в YANDEX_SPEECHKIT_VOICE',
     'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_API_KEY',
     'voice_no_voice': 'Озвучивание не настроено: на сервере нет секрета ELEVENLABS_VOICE_ID',
     'voice_bad_voice': 'Идентификатор голоса в ELEVENLABS_VOICE_ID некорректен',
@@ -203,21 +211,48 @@ def clean_for_speech(text: str) -> str:
     return t.strip()
 
 
-def voice_config() -> tuple:
-    key = (os.environ.get('ELEVENLABS_API_KEY') or '').strip()
-    voice = (os.environ.get('ELEVENLABS_VOICE_ID') or '').strip()
-    return key, voice
+class VoiceError(Exception):
+    def __init__(self, code: str, retryable: bool = False):
+        self.code = code
+        self.retryable = retryable
+
+
+def eleven_config() -> tuple:
+    return (os.environ.get('ELEVENLABS_API_KEY') or '').strip(), (os.environ.get('ELEVENLABS_VOICE_ID') or '').strip()
+
+
+def yandex_config() -> tuple:
+    key = (os.environ.get('YANDEX_SPEECHKIT_API_KEY') or '').strip()
+    voice = (os.environ.get('YANDEX_SPEECHKIT_VOICE') or '').strip() or YANDEX_DEFAULT_VOICE
+    folder = (os.environ.get('YANDEX_FOLDER_ID') or '').strip()
+    return key, voice, folder
+
+
+def providers() -> list:
+    order = []
+    ykey, yvoice, _ = yandex_config()
+    ekey, evoice = eleven_config()
+    if ykey and YANDEX_VOICE_RE.match(yvoice):
+        order.append('yandex')
+    if ekey and evoice and VOICE_ID_RE.match(evoice):
+        order.append('elevenlabs')
+    pref = (os.environ.get('VOICE_PROVIDER') or '').strip().lower()
+    if pref in order:
+        order.remove(pref)
+        order.insert(0, pref)
+    return order
 
 
 def voice_status() -> dict:
-    key, voice = voice_config()
+    ykey, yvoice, _ = yandex_config()
+    ekey, evoice = eleven_config()
+    order = providers()
     return {
         'voice': {
-            'configured': bool(key and voice and VOICE_ID_RE.match(voice)),
-            'hasKey': bool(key),
-            'hasVoiceId': bool(voice),
-            'model': VOICE_MODEL,
-            'viaRelay': ELEVEN_BASE != 'https://api.elevenlabs.io',
+            'configured': bool(order),
+            'providers': order,
+            'yandex': {'hasKey': bool(ykey), 'voice': yvoice},
+            'elevenlabs': {'hasKey': bool(ekey), 'hasVoiceId': bool(evoice), 'model': VOICE_MODEL, 'viaRelay': ELEVEN_BASE != 'https://api.elevenlabs.io'},
             'maxChars': VOICE_MAX_CHARS,
             'perMinute': VOICE_PER_MINUTE,
             'perDay': VOICE_PER_DAY,
@@ -225,18 +260,110 @@ def voice_status() -> dict:
     }
 
 
+def looks_like_mp3(audio: bytes) -> bool:
+    return audio[:3] == b'ID3' or (len(audio) > 2 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0)
+
+
+def synth_yandex(text: str) -> dict:
+    key, voice, folder = yandex_config()
+    fields = {'text': text, 'lang': 'ru-RU', 'voice': voice, 'format': 'mp3', 'speed': '1.0'}
+    if voice in YANDEX_EMOTION_VOICES:
+        fields['emotion'] = 'good'
+    if folder:
+        fields['folderId'] = folder
+    auth = f'Bearer {key}' if key.startswith('t1.') else f'Api-Key {key}'
+    req = urllib.request.Request(
+        'https://tts.api.cloud.yandex.net/speech/v1/tts:synthesize',
+        data=urllib.parse.urlencode(fields).encode('utf-8'),
+        headers={'Authorization': auth, 'Content-Type': 'application/x-www-form-urlencoded'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            audio = resp.read()
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:400]
+        print(f'Yandex SpeechKit HTTP {e.code}')
+        low = detail.lower()
+        if e.code == 401:
+            raise VoiceError('yandex_bad_key')
+        if e.code == 403 or 'permission' in low:
+            raise VoiceError('yandex_no_permission')
+        if e.code == 429 or 'quota' in low or 'limit' in low:
+            raise VoiceError('yandex_quota', True)
+        if e.code == 400:
+            raise VoiceError('yandex_bad_request')
+        raise VoiceError('voice_error', True)
+    except Exception as e:
+        print(f'Yandex SpeechKit error: {type(e).__name__}')
+        raise VoiceError('voice_error', True)
+    if not looks_like_mp3(audio) or len(audio) < 500:
+        print(f'Yandex SpeechKit: неожиданный ответ size={len(audio)}')
+        raise VoiceError('voice_error', True)
+    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1'}
+
+
+def synth_eleven(text: str) -> dict:
+    key, voice = eleven_config()
+    payload = json.dumps({
+        'text': text,
+        'model_id': VOICE_MODEL,
+        'language_code': 'ru',
+        'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75, 'style': 0.2, 'use_speaker_boost': True},
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        f'{ELEVEN_BASE}/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
+        data=payload,
+        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg', 'User-Agent': 'PetAgent/1.0 (+https://petagent.app)'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            audio = resp.read()
+            ctype = (resp.headers.get('Content-Type') or '').lower()
+    except urllib.error.HTTPError as e:
+        raw_detail = e.read().decode('utf-8', 'ignore')[:3000]
+        detail = raw_detail.lower()
+        if '<html' in detail or 'sanctioned countr' in detail or 'restrict access' in detail:
+            print(f'ElevenLabs HTTP {e.code}: региональная блокировка')
+            raise VoiceError('voice_region')
+        print(f'ElevenLabs HTTP {e.code}')
+        if 'missing_permissions' in detail:
+            raise VoiceError('voice_no_permission')
+        if e.code in (401, 403) and 'quota' not in detail:
+            raise VoiceError('voice_bad_key')
+        if e.code == 404 or 'voice_not_found' in detail or 'not found' in detail or (e.code == 400 and 'paid_plan' in detail):
+            raise VoiceError('voice_not_found')
+        if e.code == 402 or 'quota' in detail or 'character' in detail:
+            raise VoiceError('voice_quota')
+        if e.code == 429:
+            raise VoiceError('voice_busy', True)
+        raise VoiceError('voice_error', True)
+    except Exception as e:
+        print(f'ElevenLabs error: {type(e).__name__}')
+        raise VoiceError('voice_error', True)
+    head = audio[:300].lstrip().lower()
+    if head.startswith(b'<') or b'<html' in head:
+        print('ElevenLabs: вместо звука пришла HTML-страница')
+        raise VoiceError('voice_region')
+    if not looks_like_mp3(audio) or len(audio) < 500 or ('audio' not in ctype and 'octet-stream' not in ctype):
+        print(f'ElevenLabs: неожиданный ответ ctype={ctype!r} size={len(audio)}')
+        raise VoiceError('voice_error', True)
+    return {'audio': audio, 'voice': voice, 'model': VOICE_MODEL}
+
+
 def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
         return respond(200, voice_status())
     if event.get('httpMethod') != 'POST':
         return fail(405, 'bad_request', False)
-    key, voice = voice_config()
-    if not key:
-        return fail(503, 'voice_no_key', False, {'fallback': 'local'})
-    if not voice:
-        return fail(503, 'voice_no_voice', False, {'fallback': 'local'})
-    if not VOICE_ID_RE.match(voice):
-        return fail(503, 'voice_bad_voice', False, {'fallback': 'local'})
+    order = providers()
+    if not order:
+        ykey, _, _ = yandex_config()
+        ekey, evoice = eleven_config()
+        if not ykey and not ekey:
+            return fail(503, 'voice_no_key', False, {'fallback': 'local'})
+        return fail(503, 'voice_bad_voice' if (ekey and evoice) else 'voice_no_voice', False, {'fallback': 'local'})
     try:
         data = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
@@ -258,77 +385,29 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     if u['day'] >= VOICE_PER_DAY or u['chars'] + len(text) > VOICE_CHARS_PER_DAY or u['chars_ip'] + len(text) > VOICE_CHARS_PER_DAY * 3:
         return fail(429, 'voice_daily', False, {'fallback': 'local'})
 
-    payload = json.dumps({
-        'text': text,
-        'model_id': VOICE_MODEL,
-        'language_code': 'ru',
-        'voice_settings': {'stability': 0.5, 'similarity_boost': 0.75, 'style': 0.2, 'use_speaker_boost': True},
-    }).encode('utf-8')
-    req = urllib.request.Request(
-        f'{ELEVEN_BASE}/v1/text-to-speech/{voice}?output_format=mp3_44100_64',
-        data=payload,
-        headers={'xi-api-key': key, 'Content-Type': 'application/json', 'Accept': 'audio/mpeg', 'User-Agent': 'PetAgent/1.0 (+https://petagent.app)'},
-        method='POST',
-    )
     started = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            audio = resp.read()
-            ctype = (resp.headers.get('Content-Type') or '').lower()
-    except urllib.error.HTTPError as e:
-        raw_detail = e.read().decode('utf-8', 'ignore')[:3000]
-        detail = raw_detail.lower()
-        if '<html' in detail or 'sanctioned countr' in detail or 'restrict access' in detail:
-            print(f'ElevenLabs HTTP {e.code}: региональная блокировка (HTML-страница)')
-            log(client_id, ip, 'voice', 'voice_region')
-            return fail(502, 'voice_region', False, {'fallback': 'local'})
-        el_status = ''
+    errors = []
+    for name in order:
         try:
-            d = json.loads(raw_detail).get('detail')
-            el_status = str(d.get('status') if isinstance(d, dict) else d)[:80]
-        except Exception:
-            pass
-        print(f'ElevenLabs HTTP {e.code} status={el_status}')
-        if 'missing_permissions' in detail:
-            code = 'voice_no_permission'
-        elif e.code in (401, 403) and 'quota' not in detail:
-            code = 'voice_bad_key'
-        elif e.code == 404 or 'voice_not_found' in detail or 'not found' in detail:
-            code = 'voice_not_found'
-        elif e.code == 402 or 'quota' in detail or 'character' in detail:
-            code = 'voice_quota'
-        elif e.code == 429:
-            code = 'voice_busy'
-        elif e.code == 400 and 'paid_plan' in detail:
-            code = 'voice_not_found'
-        else:
-            code = 'voice_error'
-        log(client_id, ip, 'voice', code)
-        return fail(502, code, code in ('voice_busy', 'voice_error'), {'fallback': 'local'})
-    except Exception as e:
-        print(f'ElevenLabs error: {type(e).__name__}')
-        log(client_id, ip, 'voice', 'timeout')
-        return fail(504, 'voice_error', True, {'fallback': 'local'})
-
-    head = audio[:300].lstrip().lower()
-    is_mp3 = audio[:3] == b'ID3' or (len(audio) > 2 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0)
-    if head.startswith(b'<') or b'<html' in head:
-        print('ElevenLabs: вместо звука пришла HTML-страница (региональная блокировка)')
-        log(client_id, ip, 'voice', 'voice_region')
-        return fail(502, 'voice_region', False, {'fallback': 'local'})
-    if not is_mp3 or len(audio) < 500 or ('audio' not in ctype and 'octet-stream' not in ctype):
-        print(f'ElevenLabs: неожиданный ответ ctype={ctype!r} size={len(audio)}')
-        log(client_id, ip, 'voice', 'empty_audio')
-        return fail(502, 'voice_error', True, {'fallback': 'local'})
-    log(client_id, ip, 'voice', 'ok', pt=len(text), ct=len(audio) // 1000)
-    return respond(200, {
-        'audio': base64.b64encode(audio).decode('ascii'),
-        'mime': 'audio/mpeg',
-        'chars': len(text),
-        'voiceId': voice,
-        'model': VOICE_MODEL,
-        'ms': int((time.time() - started) * 1000),
-    })
+            res = synth_yandex(text) if name == 'yandex' else synth_eleven(text)
+        except VoiceError as e:
+            errors.append({'provider': name, 'error': e.code})
+            log(client_id, ip, 'voice', e.code)
+            continue
+        audio = res['audio']
+        log(client_id, ip, 'voice', 'ok', pt=len(text), ct=len(audio) // 1000)
+        return respond(200, {
+            'audio': base64.b64encode(audio).decode('ascii'),
+            'mime': 'audio/mpeg',
+            'chars': len(text),
+            'provider': name,
+            'voiceId': res['voice'],
+            'model': res['model'],
+            'ms': int((time.time() - started) * 1000),
+            'skipped': errors,
+        })
+    last = errors[-1]['error']
+    return fail(502, last, last in ('voice_busy', 'voice_error', 'yandex_quota'), {'fallback': 'local', 'providers': errors})
 
 
 def mood_line(stats: dict) -> str:
