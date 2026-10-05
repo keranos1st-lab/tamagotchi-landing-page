@@ -76,6 +76,12 @@ VOICE_MAX_CHARS = 450
 VOICE_PER_MINUTE = 6
 VOICE_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_PER_USER') or 40)
 VOICE_CHARS_PER_DAY = int(os.environ.get('PET_VOICE_DAILY_CHARS') or 8000)
+STT_RATES = (8000, 16000, 48000)
+STT_MAX_SECONDS = 25
+STT_MIN_SECONDS = 0.4
+STT_PER_MINUTE = 8
+STT_PER_DAY = int(os.environ.get('PET_STT_DAILY_PER_USER') or 120)
+STT_PER_DAY_IP = int(os.environ.get('PET_STT_DAILY_PER_IP') or 400)
 YANDEX_DEFAULT_VOICE = 'ermil'
 YANDEX_VOICE_RE = re.compile(r'^[a-z_]{3,30}$')
 YANDEX_EMOTION_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus'}
@@ -87,6 +93,13 @@ ERRORS = {
     'yandex_no_permission': 'У ключа Yandex нет доступа к синтезу речи — сервисному аккаунту нужна роль ai.speechkit-tts.user',
     'yandex_quota': 'Лимит Yandex SpeechKit исчерпан или превышена частота запросов',
     'yandex_bad_request': 'Yandex SpeechKit отклонил запрос — проверьте голос в YANDEX_SPEECHKIT_VOICE',
+    'stt_bad_audio': 'Не удалось прочитать запись голоса',
+    'stt_too_short': 'Слишком короткая запись — скажите фразу подлиннее',
+    'stt_too_long': 'Слишком длинная запись — говорите до 25 секунд',
+    'stt_no_speech': 'Речь не распознана — попробуйте сказать ещё раз',
+    'stt_no_permission': 'У ключа Yandex нет права на распознавание речи — сервисному аккаунту нужна роль ai.speechkit-stt.user',
+    'stt_rate': 'Слишком много голосовых запросов — подождите минуту',
+    'stt_daily': 'Дневной лимит распознавания речи исчерпан',
     'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета YANDEX_SPEECHKIT_API_KEY',
     'voice_error': 'Yandex SpeechKit временно недоступен',
     'voice_empty_text': 'Нечего озвучивать',
@@ -141,10 +154,10 @@ def usage(client_id: str, ip: str, own: bool = False) -> dict:
         k = 'TRUE' if own else 'FALSE'
         cur.execute(
             f"SELECT "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind <> 'voice' AND created_at > NOW() - INTERVAL '1 minute'), "
-            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind <> 'voice' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND own_key = {k} AND kind <> 'voice' AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
-            f"COALESCE(SUM(cost) FILTER (WHERE own_key = FALSE AND kind <> 'voice' AND created_at > date_trunc('day', NOW())), 0) "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind NOT IN ('voice', 'stt') AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND own_key = {k} AND kind NOT IN ('voice', 'stt') AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}' AND own_key = {k} AND kind NOT IN ('voice', 'stt') AND created_at > date_trunc('day', NOW()) AND status = 'ok'), "
+            f"COALESCE(SUM(cost) FILTER (WHERE own_key = FALSE AND kind NOT IN ('voice', 'stt') AND created_at > date_trunc('day', NOW())), 0) "
             f"FROM {SCHEMA}.ai_requests WHERE created_at > date_trunc('day', NOW()) - INTERVAL '1 minute'"
         )
         m, d, dip, spent = cur.fetchone()
@@ -180,6 +193,23 @@ def voice_usage(client_id: str, ip: str) -> dict:
         )
         m, d, chars, chars_ip = cur.fetchone()
         return {'minute': int(m), 'day': int(d), 'chars': int(chars), 'chars_ip': int(chars_ip)}
+    finally:
+        conn.close()
+
+
+def stt_usage(client_id: str, ip: str) -> dict:
+    conn = db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}' AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE client_id = '{esc(client_id)}'), "
+            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}') "
+            f"FROM {SCHEMA}.ai_requests WHERE kind = 'stt' AND created_at > date_trunc('day', NOW()) - INTERVAL '1 minute'"
+        )
+        m, d, d_ip = cur.fetchone()
+        return {'minute': int(m), 'day': int(d), 'day_ip': int(d_ip)}
     finally:
         conn.close()
 
@@ -276,6 +306,81 @@ def synth_yandex(text: str) -> dict:
     return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1'}
 
 
+def handle_stt(event: dict, client_id: str, ip: str) -> dict:
+    if event.get('httpMethod') == 'GET':
+        key, _, _ = yandex_config()
+        return respond(200, {'stt': {'configured': bool(key), 'maxSeconds': STT_MAX_SECONDS, 'rates': list(STT_RATES), 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
+    if event.get('httpMethod') != 'POST':
+        return fail(405, 'bad_request', False)
+    key, _, folder = yandex_config()
+    if not key:
+        return fail(503, 'voice_no_key', False)
+    try:
+        data = json.loads(event.get('body') or '{}')
+        rate = int(data.get('rate') or 16000)
+        pcm = base64.b64decode(str(data.get('audio') or ''), validate=True)
+    except Exception:
+        return fail(400, 'stt_bad_audio', False)
+    if rate not in STT_RATES or len(pcm) % 2:
+        return fail(400, 'stt_bad_audio', False)
+    seconds = len(pcm) / (rate * 2)
+    if seconds < STT_MIN_SECONDS:
+        return fail(400, 'stt_too_short', False)
+    if seconds > STT_MAX_SECONDS + 1:
+        return fail(413, 'stt_too_long', False)
+
+    try:
+        u = stt_usage(client_id, ip)
+    except Exception as e:
+        print(f'stt usage db error: {type(e).__name__}')
+        return fail(503, 'db_error', True)
+    if u['minute'] >= STT_PER_MINUTE:
+        return fail(429, 'stt_rate', True, {'retryAfter': 60})
+    if u['day'] >= STT_PER_DAY or u['day_ip'] >= STT_PER_DAY_IP:
+        return fail(429, 'stt_daily', False)
+
+    query = {'lang': 'ru-RU', 'format': 'lpcm', 'sampleRateHertz': str(rate), 'topic': 'general'}
+    if folder:
+        query['folderId'] = folder
+    auth = f'Bearer {key}' if key.startswith('t1.') else f'Api-Key {key}'
+    req = urllib.request.Request(
+        'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?' + urllib.parse.urlencode(query),
+        data=pcm,
+        headers={'Authorization': auth, 'Content-Type': 'application/octet-stream'},
+        method='POST',
+    )
+    started = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            result = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:400].lower()
+        print(f'Yandex STT HTTP {e.code}')
+        if e.code == 403 or 'permission' in detail:
+            code = 'stt_no_permission'
+        elif e.code == 401:
+            code = 'yandex_bad_key'
+        elif e.code == 429 or 'quota' in detail or 'limit' in detail:
+            code = 'yandex_quota'
+        elif e.code == 400:
+            code = 'stt_bad_audio'
+        else:
+            code = 'voice_error'
+        log(client_id, ip, 'stt', code)
+        return fail(502, code, code in ('voice_error', 'yandex_quota'))
+    except Exception as e:
+        print(f'Yandex STT error: {type(e).__name__}')
+        log(client_id, ip, 'stt', 'timeout')
+        return fail(504, 'voice_error', True)
+
+    text = str(result.get('result') or '').strip()
+    if not text:
+        log(client_id, ip, 'stt', 'no_speech', pt=int(seconds * 1000))
+        return fail(200, 'stt_no_speech', False, {'text': ''})
+    log(client_id, ip, 'stt', 'ok', pt=int(seconds * 1000))
+    return respond(200, {'text': text[:MAX_MESSAGE], 'seconds': round(seconds, 1), 'ms': int((time.time() - started) * 1000)})
+
+
 def handle_voice(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
         return respond(200, voice_status())
@@ -350,7 +455,7 @@ def mood_line(stats: dict) -> str:
     return 'Сейчас ты ' + '; '.join(notes) + '. Упоминай состояние максимум одной короткой фразой в конце и только если это уместно.'
 
 
-def build_system(pet: dict, memory: list, task: bool) -> str:
+def build_system(pet: dict, memory: list, task: bool, voice: bool = False) -> str:
     ptype = pet.get('type') if pet.get('type') in PERSONAS else 'cat'
     who, traits = PERSONAS[ptype]
     name = str(pet.get('name') or 'Питомец')[:40]
@@ -369,6 +474,11 @@ def build_system(pet: dict, memory: list, task: bool) -> str:
     ]
     if task:
         lines.append('Сейчас пользователь просит помочь с текстом: выполни задачу точно, реплики персонажа — не более одной короткой фразы.')
+    if voice:
+        lines.append(
+            'Это голосовой диалог: твой ответ будет озвучен вслух. Отвечай по-человечески, коротко — 1–3 предложения, не больше 350 символов. '
+            'Без markdown, списков, кода, ссылок и эмодзи. Числа и сокращения пиши так, как их удобно произнести.'
+        )
     if memory:
         facts = '\n'.join(f'- {m}' for m in memory)
         lines.append('Пользователь разрешил тебе помнить о нём следующее (используй только если уместно, не пересказывай список):\n' + facts)
@@ -444,8 +554,11 @@ def handler(event: dict, context) -> dict:
     client_id = re.sub(r'[^a-zA-Z0-9_-]', '', headers.get('x-client-id') or '')[:64] or 'anon'
     ip = ((event.get('requestContext') or {}).get('identity') or {}).get('sourceIp') or ''
 
-    if (event.get('queryStringParameters') or {}).get('voice'):
+    qs = event.get('queryStringParameters') or {}
+    if qs.get('voice'):
         return handle_voice(event, client_id, ip)
+    if qs.get('stt'):
+        return handle_stt(event, client_id, ip)
 
     own = None
     user_key = (headers.get('x-user-ai-key') or '').strip()
@@ -475,6 +588,7 @@ def handler(event: dict, context) -> dict:
     pet = data.get('pet') or {}
     message = str(data.get('message') or '').strip()
     task = data.get('task') or None
+    voice = bool(data.get('voice'))
     memory = [str(x)[:200] for x in (data.get('memory') or [])[:MAX_MEMORY] if str(x).strip()]
 
     if task:
@@ -512,12 +626,12 @@ def handler(event: dict, context) -> dict:
         if u['spent'] >= DAILY_BUDGET_RUB:
             return fail(429, 'budget', False)
 
-    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task))}]
+    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task), voice)}]
     messages += clean_history(data.get('history') or [])
     messages.append({'role': 'user', 'content': user_content})
 
     kind = f"text:{task['action']}" if task else 'chat'
-    max_tokens = 1400 if task else 1100
+    max_tokens = 1400 if task else 300 if voice else 1100
     started = time.time()
     try:
         result, _ = call_model(messages, max_tokens, 25, own)

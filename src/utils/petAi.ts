@@ -56,9 +56,10 @@ export async function askPet(args: {
   memory: string[];
   message: string;
   task?: { action: TextAction; source: string };
+  voice?: boolean;
 }): Promise<AiResult> {
   if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
-  const { pet, history, memory, message, task } = args;
+  const { pet, history, memory, message, task, voice } = args;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 40000);
   try {
@@ -69,6 +70,7 @@ export async function askPet(args: {
       body: JSON.stringify({
         message,
         task,
+        voice: voice || undefined,
         memory,
         history: history
           .filter((m) => m.kind !== 'error' && m.kind !== 'legacy')

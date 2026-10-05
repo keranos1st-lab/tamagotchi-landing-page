@@ -38,6 +38,16 @@
         "voice": {}
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "STT status",
+      "method": "GET",
+      "path": "/?stt=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "stt": {}
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

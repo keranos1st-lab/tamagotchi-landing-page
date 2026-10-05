@@ -15,6 +15,9 @@ import { THINK_POSES, thinkingAnim, toneClass } from './thinking';
 import { MessageBubble } from './chat/MessageBubble';
 import { TextHelper } from './chat/TextHelper';
 import { MemoryDialog } from './chat/MemoryDialog';
+import { VoiceMic, VoiceStatusLine } from './VoiceMic';
+import { useVoiceStore } from '@/store/voiceStore';
+import { cancelVoice, speakText } from '@/utils/voiceDialog';
 
 const QUICK = ['Привет! Что ты умеешь?', 'Помоги составить план на день', 'Объясни простыми словами, что такое API', 'Мотивируй меня'];
 
@@ -39,6 +42,9 @@ export function PetChat() {
     setBusyLocal(v);
     setThinking(v);
   };
+
+  const speakReplies = useVoiceStore((s) => s.speakReplies);
+  const setSpeakReplies = useVoiceStore((s) => s.setSpeakReplies);
 
   useEffect(() => () => setThinking(false), [setThinking]);
   const listRef = useRef<HTMLDivElement>(null);
@@ -79,6 +85,7 @@ export function PetChat() {
     });
     if (res.ok) {
       addChatMessage('pet', res.truncated ? `${res.reply}\n\n_(ответ обрезан по длине — попроси продолжить)_` : res.reply, { kind: 'ai', task });
+      if (useVoiceStore.getState().speakReplies && !task) speakText(res.reply);
       earn(task ? 'help' : 'chat', task ? 6 : 3);
       useThinkingStore.getState().cheer();
       if (res.remember) mem.propose(res.remember);
@@ -175,6 +182,16 @@ export function PetChat() {
             {memory.consent && memory.items.length > 0 && (
               <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-pink-500 px-1 text-[9px] font-extrabold">{memory.items.length}</span>
             )}
+          </button>
+          <button
+            onClick={() => {
+              if (speakReplies) cancelVoice();
+              setSpeakReplies(!speakReplies);
+            }}
+            className={`icon-btn !h-9 !w-9 ${speakReplies ? '!text-cyan-200' : ''}`}
+            title={speakReplies ? 'Озвучивание ответов включено' : 'Озвучивать ответы вслух'}
+          >
+            <Icon name={speakReplies ? 'Volume2' : 'VolumeX'} size={16} />
           </button>
           {chatHistory.length > 0 && (
             <button
@@ -318,10 +335,12 @@ export function PetChat() {
             placeholder={notConfigured ? 'AI-чат не настроен' : 'Спроси у питомца…'}
             className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-white placeholder:text-white/35 focus:outline-none"
           />
+          <VoiceMic className="h-10 w-10" disabled={locked || outOfQuota} />
           <button onClick={() => send(input)} disabled={!input.trim() || locked || tooLong || outOfQuota} className="btn-neon !h-10 !w-10 !rounded-xl !p-0" title="Отправить">
             <Icon name="ArrowUp" size={18} />
           </button>
         </div>
+        <VoiceStatusLine className="mt-1.5" />
         {input.length > MAX_MESSAGE * 0.8 && (
           <div className={`mt-1 text-right text-[11px] ${tooLong ? 'font-bold text-rose-300' : 'text-white/40'}`}>
             {input.length} / {MAX_MESSAGE}

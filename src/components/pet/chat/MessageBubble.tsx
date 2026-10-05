@@ -3,6 +3,8 @@ import Icon from '@/components/ui/icon';
 import type { ChatMessage } from '@/store/petStore';
 import { TEXT_ACTIONS } from '@/utils/petAi';
 import { RichText } from '../RichText';
+import { useVoiceStore } from '@/store/voiceStore';
+import { speakText } from '@/utils/voiceDialog';
 
 function CopyBtn({ text }: { text: string }) {
   const [done, setDone] = useState(false);
@@ -17,6 +19,22 @@ function CopyBtn({ text }: { text: string }) {
     >
       <Icon name={done ? 'Check' : 'Copy'} size={11} />
       {done ? 'Скопировано' : 'Копировать'}
+    </button>
+  );
+}
+
+function SpeakBtn({ text }: { text: string }) {
+  const status = useVoiceStore((s) => s.status);
+  const reply = useVoiceStore((s) => s.reply);
+  const playing = status === 'speaking' && reply === text;
+  return (
+    <button
+      onClick={() => speakText(text)}
+      disabled={status !== 'idle' && !playing}
+      className="flex items-center gap-1 text-[11px] font-semibold text-white/40 transition hover:text-white disabled:opacity-40"
+    >
+      <Icon name={playing ? 'Square' : 'Volume2'} size={11} />
+      {playing ? 'Стоп' : 'Озвучить'}
     </button>
   );
 }
@@ -126,6 +144,7 @@ export function MessageBubble({
             </span>
           )}
           <CopyBtn text={msg.text} />
+          {!isTask && msg.kind !== 'legacy' && <SpeakBtn text={msg.text} />}
         </div>
       </div>
     </div>

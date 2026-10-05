@@ -13,6 +13,9 @@ import { SignatureMove, signatureDuration } from './SignatureMove';
 import { useThinkingStore } from '@/store/thinkingStore';
 import { track } from '@/store/achievementStore';
 import { ThinkFxLayer, thinkingAnim } from './thinking';
+import { useVoiceStore } from '@/store/voiceStore';
+import { cancelVoice, toggleVoice } from '@/utils/voiceDialog';
+import { VoiceBubble } from './VoiceBubble';
 
 
 const SIZE = 120;
@@ -337,8 +340,10 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     }
   };
 
+  const voiceStatus = useVoiceStore((s) => s.status);
+  const voiceActive = voiceStatus !== 'idle';
   const thinking = useThinkingStore((s) => s.thinking);
-  const shownAnim: PetAnim = thinking && anim === 'idle' ? thinkingAnim(type) : anim === 'idle' && moodAnim ? moodAnim : anim;
+  const shownAnim: PetAnim = voiceStatus === 'listening' && anim === 'idle' ? 'wave' : thinking && anim === 'idle' ? thinkingAnim(type) : anim === 'idle' && moodAnim ? moodAnim : anim;
   const nearBottom = pos.y > window.innerHeight - SIZE - 110;
 
   return (
@@ -350,8 +355,10 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
         setHover(false);
         strokeLast.current = null;
       }}
+      data-voice-active={voiceActive || undefined}
     >
-      {bubble && (
+      <VoiceBubble below={pos.y < 200} />
+      {bubble && !voiceActive && (
         <div
           key={bubble}
           className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-xs font-extrabold shadow-lg pa-pop ${
@@ -373,8 +380,8 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
           Погладь мышкой
         </div>
       )}
-      {!bubble && !hover && !activity && <PetEmotion need={need} compact />}
-      {hover && !bubble && anim !== 'beg' && (
+      {!bubble && !hover && !activity && !voiceActive && <PetEmotion need={need} compact />}
+      {(hover || voiceActive) && !bubble && anim !== 'beg' && (
         <div
           className={`absolute left-1/2 -translate-x-1/2 z-10 animate-fadeIn ${nearBottom ? '-top-11' : '-bottom-9'}`}
         >
@@ -382,6 +389,11 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
             onAction={(a) => playOnce(a, 2400)}
             extra={
               <>
+                <PillButton
+                  title={voiceActive ? 'Остановить голосовой диалог' : 'Сказать голосом'}
+                  icon={voiceStatus === 'listening' ? 'Square' : voiceActive ? 'X' : 'Mic'}
+                  onClick={() => (voiceStatus === 'listening' ? toggleVoice() : voiceActive ? cancelVoice() : toggleVoice())}
+                />
                 {canPip && (
                   <PillButton title="Открыть поверх всех окон" icon="PictureInPicture2" onClick={onOpenPip} />
                 )}
