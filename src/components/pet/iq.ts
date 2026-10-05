@@ -35,3 +35,16 @@ export const iqNext = (iq: number): { level: IqLevel; need: number } | null => {
   if (l === 'smart') return { level: 'genius', need: Math.ceil(IQ_GENIUS - iq) };
   return null;
 };
+
+export const IQ_UP_PHRASE: Record<Exclude<IqLevel, 'baby'>, string> = {
+  smart: 'Я стал Умным!',
+  genius: 'Я стал Гением!',
+};
+
+export const IQ_UP_HINT: Record<Exclude<IqLevel, 'baby'>, string> = {
+  smart: 'Теперь я понимаю больше — спрашивай смелее!',
+  genius: 'Теперь я знаю всё — спрашивай о чём угодно!',
+};
+
+const ORDER: IqLevel[] = ['baby', 'smart', 'genius'];
+export const iqRankIndex = (l: IqLevel) => ORDER.indexOf(l);

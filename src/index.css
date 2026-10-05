@@ -1206,3 +1206,17 @@
 @media (prefers-reduced-motion: reduce) {
   .ach-hero::after, .ach-medal-on::after, .ach-legendary.ach-medal-on, .ach-toast-in, .ach-toast-medal, .ach-spark { animation: none !important; }
 }
+
+.iq-card { animation: iqCard .6s cubic-bezier(.2,1.4,.35,1) both; }
+.iq-brain { animation: iqBrain 1.6s ease-in-out .3s infinite; }
+.iq-ring { animation: iqRing 1.6s ease-out .2s infinite; }
+.iq-spark { opacity: 0; animation: iqSpark 1.3s ease-out .2s infinite; }
+@keyframes iqCard { from { opacity: 0; transform: translateY(-24px) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes iqBrain { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes iqRing { from { transform: scale(.7); opacity: .9; } to { transform: scale(1.7); opacity: 0; } }
+@keyframes iqSpark {
+  0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--a)) translateY(0) scale(.4); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--a)) translateY(calc(var(--d) * -1)) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .iq-brain, .iq-ring, .iq-spark { animation: none !important; } .iq-spark { opacity: 0; } }

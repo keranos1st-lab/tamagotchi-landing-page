@@ -16,6 +16,8 @@ import { ThinkFxLayer, thinkingAnim } from './thinking';
 import { useVoiceStore } from '@/store/voiceStore';
 import { cancelVoice, toggleVoice } from '@/utils/voiceDialog';
 import { VoiceBubble } from './VoiceBubble';
+import { useIqUpStore } from '@/store/iqUpStore';
+import { IQ_UP_PHRASE } from './iq';
 
 
 const SIZE = 120;
@@ -240,6 +242,15 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     }, ms);
   };
 
+  const iqEvent = useIqUpStore((s) => s.event);
+  useEffect(() => {
+    if (!iqEvent || iqEvent.level === 'baby') return;
+    cuddle.current = 'none';
+    clearTimeout(askTimer.current);
+    playOnce('jump', 2400, IQ_UP_PHRASE[iqEvent.level]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [iqEvent?.id]);
+
   const BEG_LINES = ['Погладь меня?', 'Я соскучился…', 'Ну погладь!', 'Можно обнимашки?'];
   onArrive.current = () => {
     cuddle.current = 'asking';
@@ -345,6 +356,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
   const thinking = useThinkingStore((s) => s.thinking);
   const shownAnim: PetAnim = voiceStatus === 'listening' && anim === 'idle' ? 'wave' : thinking && anim === 'idle' ? thinkingAnim(type) : anim === 'idle' && moodAnim ? moodAnim : anim;
   const nearBottom = pos.y > window.innerHeight - SIZE - 110;
+  const bubbleSide: 'left' | 'right' | 'center' = pos.x > window.innerWidth - 230 ? 'right' : pos.x < 110 ? 'left' : 'center';
 
   return (
     <div
@@ -361,12 +373,16 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       {bubble && !voiceActive && (
         <div
           key={bubble}
-          className={`absolute -top-10 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-xs font-extrabold shadow-lg pa-pop ${
-            anim === 'beg' ? 'text-pink-600 ring-2 ring-pink-300/60' : 'text-slate-800'
-          }`}
+          className={`absolute -top-10 whitespace-nowrap rounded-2xl bg-white px-3 py-1.5 text-xs font-extrabold shadow-lg pa-pop ${
+            bubbleSide === 'right' ? 'right-2' : bubbleSide === 'left' ? 'left-2' : 'left-1/2 -translate-x-1/2'
+          } ${anim === 'beg' ? 'text-pink-600 ring-2 ring-pink-300/60' : 'text-slate-800'}`}
         >
           {bubble}
-          <span className="absolute -bottom-1 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-white" />
+          <span
+            className={`absolute -bottom-1 h-2.5 w-2.5 rotate-45 bg-white ${
+              bubbleSide === 'right' ? 'right-8' : bubbleSide === 'left' ? 'left-8' : 'left-1/2 -translate-x-1/2'
+            }`}
+          />
         </div>
       )}
       {activity && !bubble && (

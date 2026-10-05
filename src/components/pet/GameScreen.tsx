@@ -6,6 +6,7 @@ import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetNotifications } from './useNotifications';
 import { usePetting } from './usePetting';
 import { LevelUpModal } from './LevelUpModal';
+import { IqLevelToast, IqLevelWatcher } from './IqLevelUp';
 import { useWantsCuddle } from './useCuddle';
 import { usePetStore } from '@/store/petStore';
 import { useThinkingStore } from '@/store/thinkingStore';
@@ -109,6 +110,8 @@ export function GameScreen() {
     <div className="pa-app flex flex-col">
       <FloatingPet />
       <LevelUpModal />
+      <IqLevelWatcher />
+      <IqLevelToast />
       <AchievementToast />
       <PetHeader />
 
