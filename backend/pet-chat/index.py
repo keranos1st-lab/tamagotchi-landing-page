@@ -10,6 +10,7 @@ AI-чат питомца PetAgent через сервис Польза (polza.ai
 OpenRouter или DeepSeek — тогда запрос идёт за его счёт, ключ не сохраняется.
 """
 import base64
+import concurrent.futures
 import json
 import os
 import re
@@ -82,7 +83,12 @@ STT_MIN_SECONDS = 0.4
 STT_PER_MINUTE = 8
 STT_PER_DAY = int(os.environ.get('PET_STT_DAILY_PER_USER') or 120)
 STT_PER_DAY_IP = int(os.environ.get('PET_STT_DAILY_PER_IP') or 400)
-YANDEX_DEFAULT_VOICE = 'ermil'
+YANDEX_DEFAULT_VOICE = 'denis'
+YANDEX_V1_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus', 'oksana', 'alyss', 'nick', 'john', 'marina', 'dasha', 'julia', 'lera', 'masha', 'alexander', 'kirill', 'anton'}
+YANDEX_V3_CHUNK = 240
+YANDEX_FALLBACK_VOICE = 'ermil'
+YANDEX_DENIED_TTL = 600
+_voice_denied: dict = {}
 YANDEX_VOICE_RE = re.compile(r'^[a-z_]{3,30}$')
 YANDEX_EMOTION_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus'}
 OWN_PER_MINUTE = 20
@@ -267,8 +273,108 @@ def looks_like_mp3(audio: bytes) -> bool:
     return audio[:3] == b'ID3' or (len(audio) > 2 and audio[0] == 0xFF and audio[1] & 0xE0 == 0xE0)
 
 
+def split_for_v3(text: str) -> list:
+    parts, cur = [], ''
+    for sent in re.split(r'(?<=[.!?…])\s+', text):
+        while len(sent) > YANDEX_V3_CHUNK:
+            cut = sent.rfind(', ', 0, YANDEX_V3_CHUNK)
+            cut = cut + 1 if cut > 60 else sent.rfind(' ', 0, YANDEX_V3_CHUNK)
+            cut = cut if cut > 0 else YANDEX_V3_CHUNK
+            if cur:
+                parts.append(cur)
+                cur = ''
+            parts.append(sent[:cut].strip())
+            sent = sent[cut:].strip()
+        if not sent:
+            continue
+        if cur and len(cur) + 1 + len(sent) > YANDEX_V3_CHUNK:
+            parts.append(cur)
+            cur = sent
+        else:
+            cur = f'{cur} {sent}'.strip()
+    if cur:
+        parts.append(cur)
+    return [p for p in parts if p]
+
+
+def yandex_error(status: int, detail: str, what: str) -> VoiceError:
+    low = detail.lower()
+    print(f'Yandex {what} HTTP {status}: {detail[:200]}')
+    if status == 403 or 'permission' in low:
+        return VoiceError('yandex_no_permission')
+    if status == 401:
+        return VoiceError('yandex_bad_key')
+    if status == 429 or 'quota' in low or 'limit' in low:
+        return VoiceError('yandex_quota', True)
+    if status == 400:
+        return VoiceError('yandex_bad_request')
+    return VoiceError('voice_error', True)
+
+
+def synth_v3_chunk(text: str, voice: str, key: str, folder: str) -> bytes:
+    auth = f'Bearer {key}' if key.startswith('t1.') else f'Api-Key {key}'
+    headers = {'Authorization': auth, 'Content-Type': 'application/json'}
+    if folder:
+        headers['x-folder-id'] = folder
+    body = json.dumps({
+        'text': text,
+        'hints': [{'voice': voice}],
+        'outputAudioSpec': {'containerAudio': {'containerAudioType': 'MP3'}},
+        'loudnessNormalizationType': 'LUFS',
+    }).encode('utf-8')
+    req = urllib.request.Request('https://tts.api.cloud.yandex.net/tts/v3/utteranceSynthesis', data=body, headers=headers, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            raw = resp.read().decode('utf-8', 'ignore')
+    except urllib.error.HTTPError as e:
+        raise yandex_error(e.code, e.read().decode('utf-8', 'ignore')[:400], 'TTS v3')
+    except Exception as e:
+        print(f'Yandex TTS v3 error: {type(e).__name__}')
+        raise VoiceError('voice_error', True)
+    audio = b''
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        chunk = ((obj.get('result') or obj).get('audioChunk') or {}).get('data')
+        if chunk:
+            audio += base64.b64decode(chunk)
+    if len(audio) < 300:
+        print(f'Yandex TTS v3: пустой ответ size={len(audio)} head={raw[:160]!r}')
+        raise VoiceError('voice_error', True)
+    return audio
+
+
+def synth_yandex_v3(text: str, voice: str, key: str, folder: str) -> dict:
+    parts = split_for_v3(text)
+    if len(parts) == 1:
+        audio = synth_v3_chunk(parts[0], voice, key, folder)
+    else:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(parts))) as pool:
+            audio = b''.join(pool.map(lambda t: synth_v3_chunk(t, voice, key, folder), parts))
+    if not looks_like_mp3(audio):
+        print(f'Yandex TTS v3: не mp3, head={audio[:8]!r}')
+        raise VoiceError('voice_error', True)
+    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v3'}
+
+
 def synth_yandex(text: str) -> dict:
     key, voice, folder = yandex_config()
+    wanted = voice
+    if voice not in YANDEX_V1_VOICES:
+        if time.time() - _voice_denied.get(voice, 0) > YANDEX_DENIED_TTL:
+            try:
+                return synth_yandex_v3(text, voice, key, folder)
+            except VoiceError as e:
+                if e.code != 'yandex_no_permission':
+                    raise
+                _voice_denied[voice] = time.time()
+                print(f'Голос {voice} недоступен для ключа, использую {YANDEX_FALLBACK_VOICE}')
+        voice = YANDEX_FALLBACK_VOICE
     fields = {'text': text, 'lang': 'ru-RU', 'voice': voice, 'format': 'mp3', 'speed': '1.0'}
     if voice in YANDEX_EMOTION_VOICES:
         fields['emotion'] = 'good'
@@ -303,7 +409,7 @@ def synth_yandex(text: str) -> dict:
     if not looks_like_mp3(audio) or len(audio) < 500:
         print(f'Yandex SpeechKit: неожиданный ответ size={len(audio)}')
         raise VoiceError('voice_error', True)
-    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1'}
+    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1', 'wanted': wanted if wanted != voice else None}
 
 
 def handle_stt(event: dict, client_id: str, ip: str) -> dict:
@@ -428,6 +534,7 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
             'chars': len(text),
             'provider': name,
             'voiceId': res['voice'],
+            'wantedVoice': res.get('wanted'),
             'model': res['model'],
             'ms': int((time.time() - started) * 1000),
             'skipped': errors,
