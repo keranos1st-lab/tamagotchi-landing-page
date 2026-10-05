@@ -87,10 +87,13 @@ STT_PER_DAY_IP = int(os.environ.get('PET_STT_DAILY_PER_IP') or 400)
 YANDEX_DEFAULT_VOICE = 'denis'
 YANDEX_V1_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus', 'oksana', 'alyss', 'nick', 'john', 'marina', 'dasha', 'julia', 'lera', 'masha', 'alexander', 'kirill', 'anton'}
 YANDEX_V3_CHUNK = 240
+YANDEX_DEFAULT_MODEL = 'livetts'
+YANDEX_DEFAULT_ROLE = 'casual'
 YANDEX_FALLBACK_VOICE = 'ermil'
 YANDEX_DENIED_TTL = 600
 _voice_denied: dict = {}
 YANDEX_VOICE_RE = re.compile(r'^[a-z_]{3,30}$')
+YANDEX_TOKEN_RE = re.compile(r'^[a-z0-9_.\-]{1,40}$')
 YANDEX_EMOTION_VOICES = {'alena', 'filipp', 'ermil', 'jane', 'omazh', 'zahar', 'madirus'}
 OWN_PER_MINUTE = 20
 OWN_PER_DAY = 500
@@ -251,6 +254,21 @@ def yandex_config() -> tuple:
     return key, voice, folder
 
 
+def yandex_tts_settings() -> dict:
+    def pick(name: str, default: str) -> str:
+        v = (os.environ.get(name) or '').strip().lower()
+        return v if v and YANDEX_TOKEN_RE.match(v) else default
+    _, voice, _ = yandex_config()
+    fb = os.environ.get('YANDEX_TTS_FALLBACK_VOICE')
+    fallback = YANDEX_FALLBACK_VOICE if fb is None else (fb.strip().lower() if YANDEX_TOKEN_RE.match(fb.strip().lower() or '-') else '')
+    return {
+        'model': pick('YANDEX_TTS_MODEL', YANDEX_DEFAULT_MODEL),
+        'voice': voice,
+        'role': pick('YANDEX_TTS_ROLE', YANDEX_DEFAULT_ROLE) if (os.environ.get('YANDEX_TTS_ROLE') or '').strip().lower() != 'none' else '',
+        'fallback': fallback,
+    }
+
+
 def providers() -> list:
     key, voice, _ = yandex_config()
     return ['yandex'] if key and YANDEX_VOICE_RE.match(voice) else []
@@ -264,6 +282,7 @@ def voice_status() -> dict:
             'provider': 'yandex',
             'hasKey': bool(key),
             'voice': voice,
+            'tts': yandex_tts_settings(),
             'maxChars': VOICE_MAX_CHARS,
             'perMinute': VOICE_PER_MINUTE,
             'perDay': VOICE_PER_DAY,
@@ -313,14 +332,18 @@ def yandex_error(status: int, detail: str, what: str) -> VoiceError:
     return VoiceError('voice_error', True)
 
 
-def synth_v3_chunk(text: str, voice: str, key: str, folder: str) -> bytes:
+def synth_v3_chunk(text: str, voice: str, key: str, folder: str, model: str, role: str) -> bytes:
     auth = f'Bearer {key}' if key.startswith('t1.') else f'Api-Key {key}'
     headers = {'Authorization': auth, 'Content-Type': 'application/json'}
     if folder:
         headers['x-folder-id'] = folder
+    hints = [{'voice': voice}]
+    if role:
+        hints.append({'role': role})
     body = json.dumps({
+        'model': model,
         'text': text,
-        'hints': [{'voice': voice}],
+        'hints': hints,
         'outputAudioSpec': {'containerAudio': {'containerAudioType': 'MP3'}},
         'loudnessNormalizationType': 'LUFS',
     }).encode('utf-8')
@@ -351,32 +374,43 @@ def synth_v3_chunk(text: str, voice: str, key: str, folder: str) -> bytes:
     return audio
 
 
-def synth_yandex_v3(text: str, voice: str, key: str, folder: str) -> dict:
+def synth_yandex_v3(text: str, voice: str, key: str, folder: str, model: str, role: str) -> dict:
     parts = split_for_v3(text)
     if len(parts) == 1:
-        audio = synth_v3_chunk(parts[0], voice, key, folder)
+        audio = synth_v3_chunk(parts[0], voice, key, folder, model, role)
     else:
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(parts))) as pool:
-            audio = b''.join(pool.map(lambda t: synth_v3_chunk(t, voice, key, folder), parts))
+            audio = b''.join(pool.map(lambda t: synth_v3_chunk(t, voice, key, folder, model, role), parts))
     if not looks_like_mp3(audio):
         print(f'Yandex TTS v3: не mp3, head={audio[:8]!r}')
         raise VoiceError('voice_error', True)
-    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v3'}
+    return {'audio': audio, 'voice': voice, 'model': model, 'role': role or None, 'api': 'v3'}
 
 
 def synth_yandex(text: str) -> dict:
-    key, voice, folder = yandex_config()
+    key, _, folder = yandex_config()
+    cfg = yandex_tts_settings()
+    voice = cfg['voice']
     wanted = voice
+    reason = None
     if voice not in YANDEX_V1_VOICES:
-        if time.time() - _voice_denied.get(voice, 0) > YANDEX_DENIED_TTL:
+        denied_key = f"{cfg['model']}:{voice}:{cfg['role']}"
+        if time.time() - _voice_denied.get(denied_key, 0) > YANDEX_DENIED_TTL:
             try:
-                return synth_yandex_v3(text, voice, key, folder)
+                return synth_yandex_v3(text, voice, key, folder, cfg['model'], cfg['role'])
             except VoiceError as e:
-                if e.code != 'yandex_no_permission':
+                if e.code not in ('yandex_no_permission', 'yandex_bad_request') or not cfg['fallback']:
                     raise
-                _voice_denied[voice] = time.time()
-                print(f'Голос {voice} недоступен для ключа, использую {YANDEX_FALLBACK_VOICE}')
-        voice = YANDEX_FALLBACK_VOICE
+                _voice_denied[denied_key] = time.time()
+                reason = e.code
+                print(f"Голос {voice} (модель {cfg['model']}) недоступен: {e.code}, использую {cfg['fallback']}")
+        elif not cfg['fallback']:
+            raise VoiceError('yandex_no_permission')
+        if not cfg['fallback']:
+            raise VoiceError('yandex_no_permission')
+        voice = cfg['fallback']
+        if voice not in YANDEX_V1_VOICES:
+            return {**synth_yandex_v3(text, voice, key, folder, 'general', ''), 'wanted': wanted, 'reason': reason or 'cached'}
     fields = {'text': text, 'lang': 'ru-RU', 'voice': voice, 'format': 'mp3', 'speed': '1.0'}
     if voice in YANDEX_EMOTION_VOICES:
         fields['emotion'] = 'good'
@@ -411,7 +445,7 @@ def synth_yandex(text: str) -> dict:
     if not looks_like_mp3(audio) or len(audio) < 500:
         print(f'Yandex SpeechKit: неожиданный ответ size={len(audio)}')
         raise VoiceError('voice_error', True)
-    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1', 'wanted': wanted if wanted != voice else None}
+    return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1', 'api': 'v1', 'wanted': wanted if wanted != voice else None, 'reason': reason or ('cached' if wanted != voice else None)}
 
 
 def handle_stt(event: dict, client_id: str, ip: str) -> dict:
@@ -542,6 +576,10 @@ def handle_voice(event: dict, client_id: str, ip: str) -> dict:
             'provider': name,
             'voiceId': res['voice'],
             'wantedVoice': res.get('wanted'),
+            'role': res.get('role'),
+            'api': res.get('api'),
+            'fallbackReason': res.get('reason'),
+            'audioFormat': 'mp3',
             'model': res['model'],
             'ms': int((time.time() - started) * 1000),
             'skipped': errors,
