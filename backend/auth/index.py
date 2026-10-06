@@ -164,10 +164,6 @@ def reset_code_hash(user_id: int, code: str) -> str:
     return hmac.new(key, f'{int(user_id)}:{code}'.encode(), hashlib.sha256).hexdigest()
 
 
-def lock_email(cur, email: str) -> None:
-    cur.execute(f"SELECT pg_advisory_xact_lock(hashtext('pwreset:{esc(email)}'))")
-
-
 def request_password_reset(conn, cur, email: str, ip: str) -> dict:
     if not EMAIL_RE.match(email):
         return fail(400, 'bad_email')
@@ -177,7 +173,8 @@ def request_password_reset(conn, cur, email: str, ip: str) -> dict:
     conn.autocommit = False
     code = None
     try:
-        lock_email(cur, email)
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = '{esc(email)}' FOR UPDATE")
+        user_row = cur.fetchone()
         cur.execute(f"DELETE FROM {SCHEMA}.password_reset_requests WHERE created_at < NOW() - INTERVAL '1 day'")
         cur.execute(
             f"SELECT "
@@ -195,10 +192,8 @@ def request_password_reset(conn, cur, email: str, ip: str) -> dict:
             return fail(429, 'reset_limit')
         cur.execute(f"INSERT INTO {SCHEMA}.password_reset_requests (email, ip) VALUES ('{esc(email)}', '{esc(ip)}')")
 
-        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = '{esc(email)}'")
-        row = cur.fetchone()
-        if row:
-            uid = int(row[0])
+        if user_row:
+            uid = int(user_row[0])
             code = f'{secrets.randbelow(1_000_000):06d}'
             cur.execute(f"UPDATE {SCHEMA}.password_resets SET closed_at = NOW() WHERE user_id = {uid} AND closed_at IS NULL")
             cur.execute(
@@ -234,7 +229,6 @@ def confirm_password_reset(conn, cur, email: str, code: str, new_password: str) 
     new_hash = hash_password(new_password)
     conn.autocommit = False
     try:
-        lock_email(cur, email)
         cur.execute(
             f"SELECT id, user_id, code_hash, attempts FROM {SCHEMA}.password_resets "
             f"WHERE email = '{esc(email)}' AND closed_at IS NULL AND expires_at > NOW() "
