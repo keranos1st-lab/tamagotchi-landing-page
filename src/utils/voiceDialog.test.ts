@@ -11,6 +11,33 @@ g.localStorage = {
 };
 g.document = { visibilityState: 'visible', hidden: false, addEventListener() {}, removeEventListener() {} };
 
+const winListeners: Record<string, Array<(e: unknown) => void>> = {};
+class FakeAudio {
+  static all: FakeAudio[] = [];
+  onended: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  paused = false;
+  constructor(public src: string) {
+    FakeAudio.all.push(this);
+  }
+  play() {
+    return Promise.resolve();
+  }
+  pause() {
+    this.paused = true;
+  }
+}
+g.Audio = FakeAudio;
+class FakeUtterance {
+  onend: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  lang = '';
+  voice: unknown = null;
+  rate = 1;
+  constructor(public text: string) {}
+}
+g.SpeechSynthesisUtterance = FakeUtterance;
+
 const procs: Array<{ onaudioprocess: ((e: unknown) => void) | null }> = [];
 class FakeCtx {
   sampleRate = 16000;
@@ -28,7 +55,9 @@ class FakeCtx {
 const setupWindow = () => {
   g.window = {
     AudioContext: FakeCtx,
-    addEventListener() {},
+    addEventListener(type: string, fn: (e: unknown) => void) {
+      (winListeners[type] ??= []).push(fn);
+    },
     removeEventListener() {},
     localStorage: g.localStorage,
     speechSynthesis: { getVoices: () => [], cancel() {}, speak() {} },
@@ -92,6 +121,7 @@ beforeEach(() => {
   cancelVoice();
   reqs = [];
   procs.length = 0;
+  FakeAudio.all = [];
   honorAbort = true;
   sttConfig.timeoutMs = 20000;
   aiConfig.timeoutMs = 40000;
@@ -471,5 +501,262 @@ describe('голосовой диалог: отмена AI-запроса', () =
     expect(vs().note).toContain('не успел');
     expect(useThinkingStore.getState().thinking).toBe(false);
     expect(usePetStore.getState().chatHistory.some((m) => m.kind === 'error')).toBe(true);
+  });
+});
+
+type Stage = 'recording' | 'transcribing' | 'thinking' | 'synthesis' | 'playing';
+const STAGES: Stage[] = ['recording', 'transcribing', 'thinking', 'synthesis', 'playing'];
+const audioOk = (audio = 'QUJD') => ({ ok: true, status: 200, json: async () => ({ audio }) });
+const thinking = () => useThinkingStore.getState().thinking;
+const pressEscape = () => (winListeners.keydown ?? []).forEach((f) => f({ key: 'Escape' }));
+const tapMic = () => toggleVoice();
+const loud = () => procs[procs.length - 1].onaudioprocess?.({ inputBuffer: { getChannelData: () => new Float32Array(8192).fill(0.5) } });
+
+const driveTo = async (stage: Stage) => {
+  await toggleVoice();
+  await settle();
+  loud();
+  if (stage === 'recording') return;
+  void toggleVoice();
+  await settle();
+  if (stage === 'transcribing') return;
+  of('stt')[0].resolve(sttOk('как дела'));
+  await settle();
+  if (stage === 'thinking') return;
+  of('ai')[0].resolve(aiOk('отлично'));
+  await settle();
+  if (stage === 'synthesis') return;
+  of('voice')[0].resolve(audioOk());
+  await settle();
+};
+
+const expectIdle = () => {
+  expect(vs().status).toBe('idle');
+  expect(vs().level).toBe(0);
+  expect(thinking()).toBe(false);
+  expect(vs().note).toBeNull();
+};
+
+describe('остановка на всех этапах: состояние', () => {
+  for (const stage of STAGES) {
+    test(`Escape на этапе «${stage}»: idle, level 0, thinking false`, async () => {
+      await driveTo(stage);
+      if (stage === 'recording') expect(vs().level).toBeGreaterThan(0);
+      if (stage === 'thinking') expect(thinking()).toBe(true);
+      expect(vs().status).not.toBe('idle');
+      pressEscape();
+      expectIdle();
+      await settle();
+      expectIdle();
+    });
+  }
+
+  for (const stage of ['transcribing', 'thinking', 'synthesis', 'playing'] as Stage[]) {
+    test(`повторное нажатие микрофона на этапе «${stage}»: idle, level 0, thinking false`, async () => {
+      await driveTo(stage);
+      await tapMic();
+      expectIdle();
+      await settle();
+      expectIdle();
+    });
+  }
+
+  test('во время записи повторное нажатие завершает запись и отправляет её, следующее нажатие останавливает', async () => {
+    await driveTo('recording');
+    void tapMic();
+    await settle();
+    expect(vs().status).toBe('transcribing');
+    expect(of('stt').length).toBe(1);
+    await tapMic();
+    expectIdle();
+    expect(of('stt')[0].signal?.aborted).toBe(true);
+  });
+
+  test('Escape в покое ничего не меняет', async () => {
+    pressEscape();
+    expectIdle();
+    expect(reqs.length).toBe(0);
+  });
+
+  test('остановка во время записи не отправляет запросов и закрывает запись', async () => {
+    await driveTo('recording');
+    pressEscape();
+    await settle();
+    expect(reqs.length).toBe(0);
+    expect(procs[0].onaudioprocess).toBeNull();
+  });
+
+  test('остановка во время ожидания AI: отправленное сообщение пользователя остаётся, ошибок в чате нет', async () => {
+    await driveTo('thinking');
+    pressEscape();
+    await settle();
+    const h = usePetStore.getState().chatHistory;
+    expect(h.map((m) => m.role)).toEqual(['user']);
+    expect(h.some((m) => m.kind === 'error')).toBe(false);
+  });
+});
+
+describe('остановка озвучки: звук не начинается и не продолжается', () => {
+  test('отмена во время ожидания синтеза: запрос прерван, звук не создаётся даже при позднем ответе', async () => {
+    honorAbort = false;
+    await driveTo('synthesis');
+    expect(of('voice').length).toBe(1);
+    pressEscape();
+    expect(of('voice')[0].signal?.aborted).toBe(true);
+    of('voice')[0].resolve(audioOk());
+    await settle();
+    expect(FakeAudio.all.length).toBe(0);
+    expectIdle();
+  });
+
+  test('отмена во время ожидания синтеза: резервный голос системы не включается при ошибке сервера', async () => {
+    honorAbort = false;
+    const spoken: unknown[] = [];
+    (g.window as { speechSynthesis: { speak: (u: unknown) => void } }).speechSynthesis.speak = (u) => void spoken.push(u);
+    await driveTo('synthesis');
+    pressEscape();
+    of('voice')[0].resolve({ ok: false, status: 500, json: async () => ({ message: 'сбой' }) });
+    await settle();
+    expect(spoken.length).toBe(0);
+    expectIdle();
+  });
+
+  test('отмена во время воспроизведения: звук остановлен, статус idle', async () => {
+    await driveTo('playing');
+    expect(vs().status).toBe('speaking');
+    expect(FakeAudio.all.length).toBe(1);
+    expect(FakeAudio.all[0].paused).toBe(false);
+    pressEscape();
+    expect(FakeAudio.all[0].paused).toBe(true);
+    expectIdle();
+  });
+
+  test('после остановки воспроизведения конец старого звука не меняет состояние', async () => {
+    await driveTo('playing');
+    const a = FakeAudio.all[0];
+    pressEscape();
+    a.onended?.();
+    await settle();
+    expectIdle();
+  });
+});
+
+describe('новый диалог после остановки', () => {
+  const lateResolve = (stage: Stage) => {
+    if (stage === 'transcribing') of('stt')[0].resolve(sttOk('старый текст'));
+    if (stage === 'thinking') of('ai')[0].resolve(aiOk('старый ответ', undefined, 'старая память'));
+    if (stage === 'synthesis') of('voice')[0].resolve(audioOk('T0xE'));
+  };
+
+  for (const stage of ['transcribing', 'thinking', 'synthesis'] as Stage[]) {
+    test(`поздний результат этапа «${stage}» не меняет новый диалог`, async () => {
+      honorAbort = false;
+      await driveTo(stage);
+      const old = reqs.slice();
+      const petBefore = usePetStore.getState().chatHistory.filter((m) => m.role === 'pet').length;
+      pressEscape();
+      expectIdle();
+
+      await toggleVoice();
+      await settle();
+      expect(vs().status).toBe('listening');
+      loud();
+      expect(vs().level).toBeGreaterThan(0);
+      const levelBefore = vs().level;
+
+      lateResolve(stage);
+      old.forEach((r) => r.resolve({ ok: false, status: 500, json: async () => ({ message: 'старая ошибка' }) }));
+      await settle();
+
+      expect(vs().status).toBe('listening');
+      expect(vs().level).toBe(levelBefore);
+      expect(vs().note).toBeNull();
+      expect(vs().heard).toBe('');
+      expect(useMemoryStore.getState().pending).toBeNull();
+      expect(FakeAudio.all.length).toBe(0);
+      expect(usePetStore.getState().chatHistory.filter((m) => m.role === 'pet').length).toBe(petBefore);
+      pressEscape();
+    });
+  }
+
+  test('поздний звук старого диалога не останавливает и не подменяет звук нового', async () => {
+    await driveTo('playing');
+    const oldAudio = FakeAudio.all[0];
+    pressEscape();
+    reqs = [];
+    procs.length = 0;
+    await driveTo('playing');
+    expect(vs().status).toBe('speaking');
+    const newAudio = FakeAudio.all[1];
+    oldAudio.onended?.();
+    await settle();
+    expect(vs().status).toBe('speaking');
+    expect(newAudio.paused).toBe(false);
+    pressEscape();
+    expect(newAudio.paused).toBe(true);
+    expectIdle();
+  });
+
+  test('после остановки на любом этапе новый диалог доходит до конца', async () => {
+    for (const stage of STAGES) {
+      reqs = [];
+      procs.length = 0;
+      FakeAudio.all = [];
+      await driveTo(stage);
+      pressEscape();
+      expectIdle();
+    }
+    reqs = [];
+    procs.length = 0;
+    FakeAudio.all = [];
+    usePetStore.setState({ chatHistory: [] });
+    await driveTo('playing');
+    expect(vs().status).toBe('speaking');
+    FakeAudio.all[0].onended?.();
+    await settle();
+    expect(vs().status).toBe('idle');
+    expect(usePetStore.getState().chatHistory.map((m) => m.role)).toEqual(['user', 'pet']);
+  });
+});
+
+describe('обычный завершённый диалог без отмены', () => {
+  test('запись, распознавание, AI и озвучка проходят до idle', async () => {
+    const seen: string[] = [];
+    const unsub = useVoiceStore.subscribe((st) => {
+      if (seen[seen.length - 1] !== st.status) seen.push(st.status);
+    });
+    await driveTo('playing');
+    FakeAudio.all[0].onended?.();
+    await settle();
+    unsub();
+    expect(seen).toEqual(['listening', 'transcribing', 'thinking', 'speaking', 'idle']);
+    expect(vs().heard).toBe('как дела');
+    expect(vs().reply).toBe('отлично');
+    expect(vs().note).toBeNull();
+    expect(vs().level).toBe(0);
+    expect(thinking()).toBe(false);
+    expect(usePetStore.getState().chatHistory.map((m) => m.role)).toEqual(['user', 'pet']);
+    expect(FakeAudio.all[0].paused).toBe(false);
+  });
+
+  test('резервный голос после ошибки сервера озвучки доводит диалог до idle с пояснением', async () => {
+    const spoken: Array<{ onend: (() => void) | null }> = [];
+    (g.window as { speechSynthesis: { speak: (u: { onend: (() => void) | null }) => void } }).speechSynthesis.speak = (u) => void spoken.push(u);
+    await toggleVoice();
+    await settle();
+    loud();
+    void toggleVoice();
+    await settle();
+    of('stt')[0].resolve(sttOk('привет'));
+    await settle();
+    of('ai')[0].resolve(aiOk('ответ'));
+    await settle();
+    of('voice')[0].resolve({ ok: false, status: 500, json: async () => ({ message: 'сбой' }) });
+    await settle();
+    expect(spoken.length).toBe(1);
+    spoken[0].onend?.();
+    await settle();
+    expect(vs().status).toBe('idle');
+    expect(vs().note).toContain('голосом системы');
   });
 });
