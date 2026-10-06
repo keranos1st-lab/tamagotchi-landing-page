@@ -166,15 +166,17 @@ export function stopSpeaking() {
   abortPending?.();
   abortPending = null;
   const stop = stopCurrent;
+  const audio = current;
+  const speech = utterance;
   stopCurrent = null;
   stop?.();
-  if (current) {
-    current.pause();
-    current = null;
+  if (audio) {
+    audio.pause();
+    if (current === audio) current = null;
   }
-  if (utterance) {
+  if (speech) {
     window.speechSynthesis?.cancel();
-    utterance = null;
+    if (utterance === speech) utterance = null;
   }
 }
 

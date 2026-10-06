@@ -171,8 +171,9 @@ describe('speak / stopSpeaking', () => {
     pendings[0].resolve({ ok: false, status: 500, json: async () => ({ message: 'сбой' }) });
     await settle();
     expect(spoken.length).toBe(1);
+    const before = synthCancels;
     stopSpeaking();
-    expect(synthCancels).toBeGreaterThan(0);
+    expect(synthCancels).toBe(before + 1);
     const r = await p;
     expect((r as { cancelled?: boolean }).cancelled).toBe(true);
   });
