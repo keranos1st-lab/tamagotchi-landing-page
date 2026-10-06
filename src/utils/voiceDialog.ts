@@ -141,6 +141,7 @@ async function askAndSpeak(my: number, text: string) {
   vs().set({ status: 'speaking', reply: res.reply });
   const said = await speak(res.reply);
   if (turn !== my) return;
+  if (!said.ok && said.cancelled) return vs().set({ status: 'idle' });
   vs().set({
     status: 'idle',
     note: said.ok ? (said.via === 'local' ? `Голос Yandex недоступен (${said.reason}) — говорю голосом системы` : null) : `Не удалось озвучить: ${said.reason}`,
@@ -159,6 +160,7 @@ export async function speakText(text: string) {
   vs().set({ status: 'speaking', reply: text, note: null });
   const said = await speak(text);
   if (turn !== my) return;
+  if (!said.ok && said.cancelled) return vs().set({ status: 'idle' });
   vs().set({
     status: 'idle',
     note: said.ok ? (said.via === 'local' ? `Голос Yandex недоступен (${said.reason}) — говорю голосом системы` : null) : `Не удалось озвучить: ${said.reason}`,

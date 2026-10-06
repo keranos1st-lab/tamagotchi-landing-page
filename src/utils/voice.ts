@@ -158,10 +158,16 @@ export async function transcribe(pcm: Int16Array): Promise<{ ok: true; text: str
 let current: HTMLAudioElement | null = null;
 let utterance: SpeechSynthesisUtterance | null = null;
 let stopCurrent: (() => void) | null = null;
+let abortPending: (() => void) | null = null;
+let seq = 0;
 
 export function stopSpeaking() {
-  stopCurrent?.();
+  seq++;
+  abortPending?.();
+  abortPending = null;
+  const stop = stopCurrent;
   stopCurrent = null;
+  stop?.();
   if (current) {
     current.pause();
     current = null;
@@ -172,14 +178,45 @@ export function stopSpeaking() {
   }
 }
 
-function playMp3(base64: string): Promise<void> {
+type PlayEnd = 'ended' | 'cancelled';
+
+function playMp3(base64: string, id: number): Promise<PlayEnd> {
   return new Promise((resolve, reject) => {
+    if (id !== seq) return resolve('cancelled');
     const audio = new Audio(`data:audio/mpeg;base64,${base64}`);
+    const release = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      if (current === audio) current = null;
+      if (stopCurrent === cancel) stopCurrent = null;
+    };
+    const cancel = () => {
+      release();
+      audio.pause();
+      resolve('cancelled');
+    };
     current = audio;
-    stopCurrent = resolve;
-    audio.onended = () => resolve();
-    audio.onerror = () => reject(new Error('playback'));
-    audio.play().catch(reject);
+    stopCurrent = cancel;
+    audio.onended = () => {
+      release();
+      resolve('ended');
+    };
+    audio.onerror = () => {
+      release();
+      reject(new Error('playback'));
+    };
+    audio.play().then(
+      () => {
+        if (id !== seq) cancel();
+      },
+      (e) => {
+        if (id !== seq) cancel();
+        else {
+          release();
+          reject(e);
+        }
+      },
+    );
   });
 }
 
@@ -189,56 +226,93 @@ function pickRussianVoice(): SpeechSynthesisVoice | null {
   return ru.find((v) => /male|pavel|илья|павел/i.test(v.name)) ?? ru[0] ?? null;
 }
 
-function speakLocal(text: string): Promise<boolean> {
+type LocalEnd = 'ok' | 'failed' | 'cancelled';
+
+function speakLocal(text: string, id: number): Promise<LocalEnd> {
   return new Promise((resolve) => {
     const synth = window.speechSynthesis;
-    if (!synth) return resolve(false);
+    if (id !== seq) return resolve('cancelled');
+    if (!synth) return resolve('failed');
     synth.cancel();
     const u = new SpeechSynthesisUtterance(text.slice(0, 2000));
     u.lang = 'ru-RU';
     const v = pickRussianVoice();
     if (v) u.voice = v;
     u.rate = 1;
+    const release = () => {
+      u.onend = null;
+      u.onerror = null;
+      if (utterance === u) utterance = null;
+      if (stopCurrent === cancel) stopCurrent = null;
+    };
+    const cancel = () => {
+      release();
+      resolve('cancelled');
+    };
     utterance = u;
-    stopCurrent = () => resolve(true);
-    u.onend = () => resolve(true);
-    u.onerror = () => resolve(false);
+    stopCurrent = cancel;
+    u.onend = () => {
+      release();
+      resolve(id !== seq ? 'cancelled' : 'ok');
+    };
+    u.onerror = () => {
+      release();
+      resolve(id !== seq ? 'cancelled' : 'failed');
+    };
     synth.speak(u);
   });
 }
 
-export type SpeakResult = { ok: true; via: 'yandex' | 'local'; reason?: string } | { ok: false; reason: string };
+export type SpeakResult =
+  | { ok: true; via: 'yandex' | 'local'; reason?: string }
+  | { ok: false; reason: string; cancelled?: false }
+  | { ok: false; reason: string; cancelled: true };
+
+const CANCELLED: SpeakResult = { ok: false, reason: 'Озвучка остановлена', cancelled: true };
 
 export async function speak(text: string): Promise<SpeakResult> {
   stopSpeaking();
+  const id = ++seq;
+  const live = () => id === seq;
   let reason = 'Озвучка недоступна';
   if (URL) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    const abort = () => ctrl.abort();
+    abortPending = abort;
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 20000);
       const res = await fetch(`${URL}?voice=1`, {
         method: 'POST',
         signal: ctrl.signal,
         headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId() },
         body: JSON.stringify({ text }),
-      }).finally(() => clearTimeout(timer));
+      });
+      if (!live()) return CANCELLED;
       const data = await res.json().catch(() => null);
+      if (!live()) return CANCELLED;
       if (res.ok && data?.audio) {
         try {
-          await playMp3(data.audio);
-          return { ok: true, via: 'yandex' };
+          const end = await playMp3(data.audio, id);
+          return end === 'cancelled' || !live() ? CANCELLED : { ok: true, via: 'yandex' };
         } catch {
+          if (!live()) return CANCELLED;
           reason = 'Браузер не смог воспроизвести звук';
         }
       } else {
         reason = data?.message || `Ошибка сервера (${res.status})`;
       }
     } catch (e) {
+      if (!live()) return CANCELLED;
       reason = (e as Error).name === 'AbortError' ? 'Озвучка не успела ответить' : 'Нет связи с сервером озвучки';
+    } finally {
+      clearTimeout(timer);
+      if (abortPending === abort) abortPending = null;
     }
   } else {
     reason = 'Серверная функция pet-chat не опубликована';
   }
-  const ok = await speakLocal(text);
-  return ok ? { ok: true, via: 'local', reason } : { ok: false, reason };
+  if (!live()) return CANCELLED;
+  const local = await speakLocal(text, id);
+  if (local === 'cancelled' || !live()) return CANCELLED;
+  return local === 'ok' ? { ok: true, via: 'local', reason } : { ok: false, reason };
 }
