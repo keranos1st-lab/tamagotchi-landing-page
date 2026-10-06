@@ -3,6 +3,7 @@ import { usePetStore, type PetType } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
 import { PET_ICONS, type PetAnim } from './sprites';
 import { ChaseGame } from './ChaseGame';
+import { TetrisGame } from './TetrisGame';
 import { track } from '@/store/achievementStore';
 
 import Icon from '@/components/ui/icon';
@@ -16,11 +17,11 @@ function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
   return <PetSprite type={type} anim={anim} size={size} />;
 }
 
-type MiniGame = 'none' | 'catch' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction' | 'chase';
+type MiniGame = 'none' | 'tetris' | 'memory' | 'quiz' | 'snake' | 'tictactoe' | 'reaction' | 'chase';
 
 const GAMES: { id: MiniGame; icon: string; name: string; desc: string; reward: string; grad: string; glow: string; tag?: string }[] = [
   { id: 'chase', icon: 'Footprints', name: 'Догонялки', desc: 'Убегай курсором от питомца', reward: 'до +60 XP', grad: 'from-pink-500 to-fuchsia-600', glow: 'rgba(236,72,153,0.55)', tag: 'Новое' },
-  { id: 'catch', icon: 'Drumstick', name: 'Ловля еды', desc: 'Лови вкусное, мимо мусора', reward: 'до +50 XP', grad: 'from-orange-400 to-amber-500', glow: 'rgba(251,146,60,0.55)' },
+  { id: 'tetris', icon: 'Blocks', name: 'Тетрис', desc: 'Собирай линии из падающих блоков', reward: 'до +60 XP', grad: 'from-cyan-400 to-indigo-600', glow: 'rgba(56,189,248,0.55)' },
   { id: 'memory', icon: 'Layers', name: 'Мемори', desc: 'Найди пары питомцев', reward: 'до +50 XP', grad: 'from-sky-400 to-blue-600', glow: 'rgba(56,189,248,0.55)' },
   { id: 'quiz', icon: 'Brain', name: 'Викторина', desc: 'Проверь знания', reward: 'до +40 XP', grad: 'from-violet-500 to-purple-700', glow: 'rgba(139,92,246,0.55)' },
   { id: 'snake', icon: 'Route', name: 'Змейка', desc: 'Питомец собирает хвост', reward: 'до +50 XP', grad: 'from-emerald-400 to-green-600', glow: 'rgba(52,211,153,0.55)' },
@@ -61,7 +62,7 @@ export function MiniGames() {
           </div>
           <div className="font-display text-base font-bold text-white">{g.name}</div>
         </div>
-        {activeGame === 'catch' && <CatchGame onComplete={exit} />}
+        {activeGame === 'tetris' && <TetrisGame onComplete={exit} />}
         {activeGame === 'memory' && <MemoryGame onComplete={exit} />}
         {activeGame === 'quiz' && <QuizGame onComplete={exit} />}
         {activeGame === 'snake' && <SnakeGame onComplete={exit} />}
@@ -114,133 +115,6 @@ export function MiniGames() {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ========== ИГРА 1: ЛОВЛЯ ЕДЫ ==========
-function CatchGame({ onComplete }: { onComplete: () => void }) {
-  const [score, setScore] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(30);
-  const [items, setItems] = useState<Array<{ id: number; x: number; y: number; type: 'good' | 'bad'; emoji: string }>>([]);
-  const [gameOver, setGameOver] = useState(false);
-  const playedGame = usePetStore((s) => s.playedGame);
-  const [gained, setGained] = useState<number | null>(null);
-  const nextId = useRef(0);
-  const [petAnim, setPetAnim] = useState<PetAnim>('idle');
-  const animTimer = useRef<ReturnType<typeof setTimeout>>();
-  const react = (a: PetAnim) => {
-    setPetAnim(a);
-    clearTimeout(animTimer.current);
-    animTimer.current = setTimeout(() => setPetAnim('idle'), 900);
-  };
-
-  const goodItems = ['🍖', '🍎', '🐟', '🥕', '🍪', '🧀'];
-  const badItems = ['💣', '🌶️', '🗑️', '☠️'];
-
-  useEffect(() => {
-    if (gameOver) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          setGameOver(true);
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [gameOver]);
-
-  useEffect(() => {
-    if (gameOver) return;
-
-    const spawner = setInterval(() => {
-      const isGood = Math.random() > 0.3;
-      const emojis = isGood ? goodItems : badItems;
-      const newItem = {
-        id: nextId.current++,
-        x: Math.random() * 90 + 5,
-        y: 0,
-        type: isGood ? 'good' as const : 'bad' as const,
-        emoji: emojis[Math.floor(Math.random() * emojis.length)],
-      };
-      setItems(prev => [...prev, newItem]);
-    }, 800);
-
-    return () => clearInterval(spawner);
-  }, [gameOver]);
-
-  useEffect(() => {
-    if (gameOver) return;
-
-    const mover = setInterval(() => {
-      setItems(prev => {
-        const updated = prev.map(item => ({ ...item, y: item.y + 3 }));
-        return updated.filter(item => item.y < 100);
-      });
-    }, 100);
-
-    return () => clearInterval(mover);
-  }, [gameOver]);
-
-  const catchItem = (id: number, type: 'good' | 'bad') => {
-    setItems(prev => prev.filter(item => item.id !== id));
-    if (type === 'good') {
-      setScore(s => s + 10);
-      react('eat');
-      sfx.good();
-    } else {
-      setScore(s => Math.max(0, s - 15));
-      react('failed');
-      sfx.bad();
-    }
-  };
-
-  useEffect(() => {
-    if (gameOver) {
-      sfx.win();
-      setGained(playedGame('catch', Math.min(50, Math.floor(score / 3))));
-      track.game('catch');
-      track.best('catchBest', score);
-      if (score >= 100) track.win();
-    }
-  }, [gameOver]);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-sm text-white/55">Лови еду, избегай мусора!</span>
-        <div className="flex gap-2"><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-emerald-300"><Icon name="Star" size={14} />{score}</div><div className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-1.5 text-sm font-extrabold tabular-nums text-amber-300"><Icon name="Timer" size={14} />{timeLeft}с</div></div>
-      </div>
-
-      {!gameOver ? (
-        <div className="pa-field relative h-72">
-          {items.map(item => (
-            <button
-              key={item.id}
-              onClick={() => catchItem(item.id, item.type)}
-              className="absolute text-3xl transition-transform hover:scale-125 cursor-pointer drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)]"
-              style={{ left: `${item.x}%`, top: `${item.y}%` }}
-            >
-              {item.emoji}
-            </button>
-          ))}
-          <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2">
-            <MyPet anim={petAnim} size={90} />
-          </div>
-        </div>
-      ) : (
-        <GameResult
-          pet={<MyPet anim="play" size={110} />}
-          title={`${score} очков`}
-          subtitle={score >= 150 ? 'Вот это реакция!' : 'Неплохо! Попробуй побить рекорд'}
-          reward={rewardLabel(gained)}
-          onExit={onComplete}
-        />
-      )}
     </div>
   );
 }
