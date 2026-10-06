@@ -576,16 +576,35 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
     return empty[Math.floor(Math.random() * empty.length)];
   };
 
-  const handleClick = (index: number) => {
-    if (board[index] || winner || !isPlayerTurn) return;
+  const boardRef = useRef<Array<'X' | 'O' | null>>(Array(9).fill(null));
+  const lockedRef = useRef(false);
+  const finishedRef = useRef(false);
+  const aliveRef = useRef(true);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
-    const newBoard = [...board];
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    };
+  }, []);
+
+  const handleClick = (index: number) => {
+    if (!aliveRef.current || lockedRef.current || finishedRef.current) return;
+    if (boardRef.current[index]) return;
+    lockedRef.current = true;
+
+    const newBoard = [...boardRef.current];
     newBoard[index] = 'X';
+    boardRef.current = newBoard;
     setBoard(newBoard);
     sfx.pop();
 
     const result = checkWinner(newBoard);
     if (result) {
+      finishedRef.current = true;
       setWinner(result);
       if (result === 'X') sfx.win();
       setGained(playedGame('tictactoe', result === 'X' ? 20 : result === 'draw' ? 10 : 0));
@@ -598,20 +617,25 @@ function TicTacToeGame({ onComplete }: { onComplete: () => void }) {
     }
 
     setIsPlayerTurn(false);
-    setTimeout(() => {
+    timerRef.current = setTimeout(() => {
+      timerRef.current = undefined;
+      if (!aliveRef.current || finishedRef.current) return;
       const aiIndex = aiMove(newBoard);
       const aiBoard = [...newBoard];
       aiBoard[aiIndex] = 'O';
+      boardRef.current = aiBoard;
       setBoard(aiBoard);
 
       const aiResult = checkWinner(aiBoard);
       sfx.click();
       if (aiResult) {
+        finishedRef.current = true;
         setWinner(aiResult);
         if (aiResult === 'O') sfx.lose();
         setGained(playedGame('tictactoe', aiResult === 'draw' ? 10 : 2));
         track.game('tictactoe');
       }
+      lockedRef.current = false;
       setIsPlayerTurn(true);
     }, 500);
   };
