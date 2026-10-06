@@ -15,6 +15,7 @@ export type Counter =
   | 'quizPerfect'
   | 'tttWins'
   | 'catchBest'
+  | 'tetrisLinesBest'
   | 'snakeBest'
   | 'reactionBest'
   | 'nightVisits'

@@ -126,6 +126,7 @@ export function TetrisGame({ onComplete }: { onComplete: () => void }) {
     setAnim('failed');
     setGained(playedGame('tetris', rewardFor(lines)));
     track.game('tetris');
+    track.best('tetrisLinesBest', lines);
     if (lines >= WIN_LINES) track.win();
   }, [playedGame, stopHold]);
 

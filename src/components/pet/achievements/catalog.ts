@@ -93,7 +93,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'champion', title: 'Чемпион', desc: 'Одержи 25 побед в играх', icon: 'Trophy', rarity: 'epic', category: 'games', xp: 120, goal: 25, value: (x) => n(x, 'gameWins') },
   { id: 'quiz_ace', title: 'Отличник', desc: 'Ответь на все вопросы викторины', icon: 'GraduationCap', rarity: 'rare', category: 'games', xp: 50, goal: 1, value: (x) => n(x, 'quizPerfect') },
   { id: 'ttt_master', title: 'Стратег', desc: 'Обыграй питомца в крестики-нолики 5 раз', icon: 'Grid3x3', rarity: 'rare', category: 'games', xp: 50, goal: 5, value: (x) => n(x, 'tttWins') },
-  { id: 'catcher', title: 'Ловкач', desc: 'Набери 150 очков в «Ловле еды»', icon: 'Target', rarity: 'epic', category: 'games', xp: 100, goal: 150, value: (x) => n(x, 'catchBest') },
+  { id: 'catcher', title: 'Мастер линий', desc: 'Очисти 10 линий за одну партию в «Тетрисе»', icon: 'Blocks', rarity: 'epic', category: 'games', xp: 100, goal: 10, value: (x) => n(x, 'tetrisLinesBest') },
   { id: 'snake_long', title: 'Длинный хвост', desc: 'Собери 15 яблок в «Змейке»', icon: 'Route', rarity: 'epic', category: 'games', xp: 100, goal: 15, value: (x) => n(x, 'snakeBest') },
   { id: 'lightning', title: 'Молния', desc: 'Среагируй быстрее 250 мс', icon: 'Zap', rarity: 'legendary', category: 'games', xp: 200, goal: 1, value: (x) => ((x.c.reactionBest ?? 9999) < 250 ? 1 : 0) },
 
