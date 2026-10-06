@@ -29,3 +29,6 @@ export const rewardLabel = (n: number | null) =>
   n === null ? undefined : n > 0 ? `+${n} опыта` : n < 0 ? 'Лимит опыта за эту игру на сегодня исчерпан' : 'В этот раз без опыта';
 
 export const chaseReward = (caught: number) => Math.max(5, 60 - caught * 8);
+
+export const MIN_GAME_ENERGY = 10;
+export const canStartGame = (energy: number) => energy >= MIN_GAME_ENERGY;

@@ -8,7 +8,7 @@ import { track } from '@/store/achievementStore';
 import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
-import { nextSnakeStep, placeFood, OPP, rewardLabel, type Cell, type Dir } from './gameLogic';
+import { nextSnakeStep, placeFood, OPP, rewardLabel, canStartGame, type Cell, type Dir } from './gameLogic';
 
 
 function MyPet({ anim, size = 96 }: { anim: PetAnim; size?: number }) {
@@ -32,8 +32,11 @@ export function MiniGames() {
   const [activeGame, setActiveGame] = useState<MiniGame>('none');
   const { energy } = usePetStore();
   const exit = () => setActiveGame('none');
+  const start = (id: MiniGame) => {
+    if (canStartGame(usePetStore.getState().energy)) setActiveGame(id);
+  };
 
-  if (energy < 10) {
+  if (activeGame === 'none' && !canStartGame(energy)) {
     return (
       <div className="glass flex items-center gap-4 p-5">
         <MyPet anim="sleep" size={90} />
@@ -74,7 +77,7 @@ export function MiniGames() {
   return (
     <div className="space-y-3">
       <button
-        onClick={() => setActiveGame(hero.id)}
+        onClick={() => start(hero.id)}
         className="pa-tile group flex w-full items-center gap-4 overflow-hidden p-4 text-left sm:p-5"
       >
         <div className={`absolute inset-0 bg-gradient-to-r ${hero.grad} opacity-25 transition-opacity group-hover:opacity-40`} />
@@ -97,7 +100,7 @@ export function MiniGames() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {rest.map((g) => (
-          <button key={g.id} onClick={() => setActiveGame(g.id)} className="pa-tile group p-4 text-left">
+          <button key={g.id} onClick={() => start(g.id)} className="pa-tile group p-4 text-left">
             <div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full bg-gradient-to-br ${g.grad} opacity-20 blur-2xl transition-opacity group-hover:opacity-45`} />
             <div className={`pa-icon-chip relative h-11 w-11 bg-gradient-to-br ${g.grad} text-white`} style={{ ['--chip-glow' as string]: g.glow }}>
               <Icon name={g.icon} size={20} />

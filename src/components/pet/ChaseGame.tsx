@@ -6,7 +6,7 @@ import Icon from '@/components/ui/icon';
 import { GameResult } from './ui';
 import { sfx } from './sound';
 import { track } from '@/store/achievementStore';
-import { rewardLabel, chaseReward } from './gameLogic';
+import { rewardLabel, chaseReward, canStartGame } from './gameLogic';
 
 const DURATION = 30;
 const PET = 70;
@@ -18,6 +18,7 @@ type Phase = 'intro' | 'play' | 'done';
 export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const type = usePetStore((s) => s.type);
   const playedGame = usePetStore((s) => s.playedGame);
+  const energy = usePetStore((s) => s.energy);
   const [gained, setGained] = useState<number | null>(null);
 
   const [phase, setPhase] = useState<Phase>('intro');
@@ -120,6 +121,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   };
 
   const start = () => {
+    if (!canStartGame(usePetStore.getState().energy)) return;
     catchesRef.current = 0;
     rewarded.current = false;
     setGained(null);
@@ -143,7 +145,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
         title={catches === 0 ? 'Ни разу не пойман!' : `Пойман ${catches} раз`}
         subtitle={verdict}
         reward={rewardLabel(gained)}
-        onAgain={start}
+        onAgain={canStartGame(energy) ? start : undefined}
         onExit={onComplete}
       />
     );
