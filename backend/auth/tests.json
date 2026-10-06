@@ -1,7 +1,81 @@
 {
   "tests": [
-    { "name": "CORS", "method": "OPTIONS", "path": "/", "expectedStatus": 200 },
-    { "name": "Без токена", "method": "GET", "path": "/", "expectedStatus": 401, "expectedBody": { "error": "unauthorized" }, "bodyMatcher": "partial" },
-    { "name": "Плохая почта", "method": "POST", "path": "/", "body": { "action": "login", "email": "nope", "password": "12345678" }, "expectedStatus": 400, "expectedBody": { "error": "bad_email" }, "bodyMatcher": "partial" }
+    {
+      "name": "CORS",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Без токена",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error": "unauthorized"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Плохая почта",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "login",
+        "email": "nope",
+        "password": "12345678"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "bad_email"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Сброс: плохая почта",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "request_password_reset",
+        "email": "nope"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "bad_email"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Подтверждение: плохой код",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "confirm_password_reset",
+        "email": "a@example.ru",
+        "code": "12",
+        "newPassword": "12345678"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "bad_code"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Подтверждение: слабый пароль",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "confirm_password_reset",
+        "email": "a@example.ru",
+        "code": "123456",
+        "newPassword": "123"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "weak_password"
+      },
+      "bodyMatcher": "partial"
+    }
   ]
 }

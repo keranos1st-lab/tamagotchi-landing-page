@@ -1,6 +1,8 @@
 """
 Аккаунты PetAgent: регистрация и вход по почте и паролю, выход,
 проверка сессии, смена пароля и удаление аккаунта.
+Восстановление пароля по одноразовому коду из письма (SMTP с TLS):
+request_password_reset и confirm_password_reset — без авторизации.
 Пароли хранятся только в виде хеша PBKDF2, токены сессий — в виде SHA-256.
 Токен передаётся в заголовке X-Auth-Token.
 Также синхронизирует прогресс питомца, достижения и память между
@@ -15,10 +17,17 @@ import secrets
 
 import psycopg2
 
+import mailer
+
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 SESSION_DAYS = 90
 MAX_SYNC_BYTES = 400_000
 ITERATIONS = 200_000
+RESET_TTL_MINUTES = 10
+RESET_MAX_ATTEMPTS = 5
+RESET_EMAIL_PER_HOUR = 5
+RESET_IP_PER_HOUR = 20
+RESET_DONE_MESSAGE = 'Если аккаунт зарегистрирован, письмо с кодом придёт на почту'
 EMAIL_RE = re.compile(r'^[^@\s]{1,64}@[^@\s]+\.[^@\s]{2,}$')
 
 CORS = {
@@ -36,6 +45,11 @@ MESSAGES = {
     'too_many': 'Слишком много попыток входа — подождите 15 минут',
     'unauthorized': 'Сессия истекла — войдите снова',
     'bad_request': 'Некорректный запрос',
+    'reset_wait': 'Код уже отправлен — повторить можно через минуту',
+    'reset_limit': 'Слишком много запросов — попробуйте позже',
+    'invalid_code': 'Неверный или просроченный код — запросите новый',
+    'bad_code': 'Введите 6 цифр из письма',
+    'mail_unavailable': 'Отправка писем сейчас недоступна — попробуйте позже',
 }
 
 
@@ -145,6 +159,113 @@ def save_state(cur, uid: int, data: dict) -> dict:
     return respond(200, {'rev': row[0]})
 
 
+def reset_code_hash(user_id: int, code: str) -> str:
+    key = os.environ['PASSWORD_RESET_SECRET'].encode()
+    return hmac.new(key, f'{int(user_id)}:{code}'.encode(), hashlib.sha256).hexdigest()
+
+
+def lock_email(cur, email: str) -> None:
+    cur.execute(f"SELECT pg_advisory_xact_lock(hashtext('pwreset:{esc(email)}'))")
+
+
+def request_password_reset(conn, cur, email: str, ip: str) -> dict:
+    if not EMAIL_RE.match(email):
+        return fail(400, 'bad_email')
+    if not mailer.is_configured() or not os.environ.get('PASSWORD_RESET_SECRET'):
+        return fail(503, 'mail_unavailable')
+
+    conn.autocommit = False
+    code = None
+    try:
+        lock_email(cur, email)
+        cur.execute(f"DELETE FROM {SCHEMA}.password_reset_requests WHERE created_at < NOW() - INTERVAL '1 day'")
+        cur.execute(
+            f"SELECT "
+            f"COUNT(*) FILTER (WHERE email = '{esc(email)}' AND created_at > NOW() - INTERVAL '1 minute'), "
+            f"COUNT(*) FILTER (WHERE email = '{esc(email)}'), "
+            f"COUNT(*) FILTER (WHERE ip = '{esc(ip)}') "
+            f"FROM {SCHEMA}.password_reset_requests WHERE created_at > NOW() - INTERVAL '1 hour'"
+        )
+        last_minute, by_email, by_ip = cur.fetchone()
+        if last_minute > 0:
+            conn.rollback()
+            return fail(429, 'reset_wait')
+        if by_email >= RESET_EMAIL_PER_HOUR or (ip and by_ip >= RESET_IP_PER_HOUR):
+            conn.rollback()
+            return fail(429, 'reset_limit')
+        cur.execute(f"INSERT INTO {SCHEMA}.password_reset_requests (email, ip) VALUES ('{esc(email)}', '{esc(ip)}')")
+
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = '{esc(email)}'")
+        row = cur.fetchone()
+        if row:
+            uid = int(row[0])
+            code = f'{secrets.randbelow(1_000_000):06d}'
+            cur.execute(f"UPDATE {SCHEMA}.password_resets SET closed_at = NOW() WHERE user_id = {uid} AND closed_at IS NULL")
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.password_resets (user_id, email, code_hash, expires_at) "
+                f"VALUES ({uid}, '{esc(email)}', '{reset_code_hash(uid, code)}', NOW() + INTERVAL '{RESET_TTL_MINUTES} minutes') RETURNING id"
+            )
+            reset_id = cur.fetchone()[0]
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    if code is not None:
+        try:
+            mailer.send_reset_code(email, code, RESET_TTL_MINUTES)
+        except Exception as e:
+            print('password_reset_mail_failed', type(e).__name__)
+            conn.autocommit = True
+            cur.execute(f"UPDATE {SCHEMA}.password_resets SET closed_at = NOW() WHERE id = {int(reset_id)} AND closed_at IS NULL")
+    return respond(200, {'ok': True, 'message': RESET_DONE_MESSAGE})
+
+
+def confirm_password_reset(conn, cur, email: str, code: str, new_password: str) -> dict:
+    if not EMAIL_RE.match(email):
+        return fail(400, 'bad_email')
+    if not re.fullmatch(r'\d{6}', code):
+        return fail(400, 'bad_code')
+    if len(new_password) < 8 or len(new_password) > 200:
+        return fail(400, 'weak_password')
+    if not os.environ.get('PASSWORD_RESET_SECRET'):
+        return fail(503, 'mail_unavailable')
+
+    new_hash = hash_password(new_password)
+    conn.autocommit = False
+    try:
+        lock_email(cur, email)
+        cur.execute(
+            f"SELECT id, user_id, code_hash, attempts FROM {SCHEMA}.password_resets "
+            f"WHERE email = '{esc(email)}' AND closed_at IS NULL AND expires_at > NOW() "
+            f"ORDER BY id DESC LIMIT 1 FOR UPDATE"
+        )
+        row = cur.fetchone()
+        if not row or row[3] >= RESET_MAX_ATTEMPTS:
+            conn.rollback()
+            return fail(400, 'invalid_code')
+        reset_id, uid, stored, attempts = int(row[0]), int(row[1]), row[2], int(row[3])
+
+        if not hmac.compare_digest(reset_code_hash(uid, code), stored.strip()):
+            closing = ', closed_at = NOW()' if attempts + 1 >= RESET_MAX_ATTEMPTS else ''
+            cur.execute(f"UPDATE {SCHEMA}.password_resets SET attempts = attempts + 1{closing} WHERE id = {reset_id}")
+            conn.commit()
+            return fail(400, 'invalid_code')
+
+        cur.execute(f"UPDATE {SCHEMA}.password_resets SET closed_at = NOW() WHERE id = {reset_id} AND closed_at IS NULL RETURNING id")
+        if not cur.fetchone():
+            conn.rollback()
+            return fail(400, 'invalid_code')
+        cur.execute(f"UPDATE {SCHEMA}.password_resets SET closed_at = NOW() WHERE user_id = {uid} AND closed_at IS NULL")
+        cur.execute(f"UPDATE {SCHEMA}.users SET password_hash = '{esc(new_hash)}' WHERE id = {uid}")
+        cur.execute(f"UPDATE {SCHEMA}.sessions SET expires_at = NOW() WHERE user_id = {uid} AND expires_at > NOW()")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    return respond(200, {'ok': True})
+
+
 def handler(event: dict, context) -> dict:
     method = event.get('httpMethod')
     if method == 'OPTIONS':
@@ -180,6 +301,12 @@ def handler(event: dict, context) -> dict:
         action = data.get('action')
         email = str(data.get('email') or '').strip().lower()[:254]
         password = str(data.get('password') or '')
+
+        if action == 'request_password_reset':
+            return request_password_reset(conn, cur, email, ip)
+
+        if action == 'confirm_password_reset':
+            return confirm_password_reset(conn, cur, email, str(data.get('code') or '').strip(), str(data.get('newPassword') or ''))
 
         if action in ('register', 'login'):
             if not EMAIL_RE.match(email):
