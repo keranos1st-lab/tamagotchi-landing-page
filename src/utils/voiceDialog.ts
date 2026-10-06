@@ -10,6 +10,7 @@ import { speak, startRecording, stopSpeaking, transcribe, type Recording } from 
 let rec: Recording | null = null;
 let turn = 0;
 let sttCtrl: AbortController | null = null;
+let aiCtrl: AbortController | null = null;
 
 const vs = () => useVoiceStore.getState();
 
@@ -48,6 +49,8 @@ export function cancelVoice() {
   turn++;
   sttCtrl?.abort();
   sttCtrl = null;
+  aiCtrl?.abort();
+  aiCtrl = null;
   rec?.cancel();
   rec = null;
   stopSpeaking();
@@ -65,6 +68,8 @@ export async function toggleVoice() {
 async function startListening() {
   sttCtrl?.abort();
   sttCtrl = null;
+  aiCtrl?.abort();
+  aiCtrl = null;
   const my = ++turn;
   vs().set({ status: 'listening', heard: '', reply: '', note: null, level: 0 });
   return startRecorder(my);
@@ -123,15 +128,21 @@ async function askAndSpeak(my: number, text: string) {
   useThinkingStore.getState().setThinking(true);
 
   const mem = useMemoryStore.getState();
+  const ctrl = new AbortController();
+  aiCtrl = ctrl;
   const res = await askPet({
     pet: usePetStore.getState(),
     history: usePetStore.getState().chatHistory.slice(0, -1),
     memory: mem.consent ? mem.items.map((i) => i.text) : [],
     message: text,
     voice: true,
+    signal: ctrl.signal,
+  }).finally(() => {
+    if (aiCtrl === ctrl) aiCtrl = null;
   });
+  if (turn !== my || ctrl.signal.aborted) return;
+  if (!res.ok && 'cancelled' in res) return vs().set({ status: 'idle', level: 0 });
   useThinkingStore.getState().setThinking(false);
-  if (turn !== my) return;
 
   if (!res.ok) {
     usePetStore.getState().addChatMessage('pet', '', {

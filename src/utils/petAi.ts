@@ -4,7 +4,11 @@ import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
 
 export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number; ownKey?: boolean; declined?: boolean };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
-export type AiResult = AiOk | AiErr;
+export type AiCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
+export type AiResult = AiOk | AiErr | AiCancelled;
+
+export const aiConfig = { timeoutMs: 40000 };
+const AI_CANCELLED: AiCancelled = { ok: false, cancelled: true, code: 'cancelled', message: 'Запрос остановлен', retryable: false };
 
 export interface AiStatus {
   configured: boolean;
@@ -57,11 +61,21 @@ export async function askPet(args: {
   message: string;
   task?: { action: TextAction; source: string };
   voice?: boolean;
+  signal?: AbortSignal;
 }): Promise<AiResult> {
+  if (args.signal?.aborted) return AI_CANCELLED;
   if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
   const { pet, history, memory, message, task, voice } = args;
+  const { signal } = args;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 40000);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, aiConfig.timeoutMs);
+  const onUserAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onUserAbort);
+  const cancelled = () => !!signal?.aborted;
   try {
     const res = await fetch(URL, {
       method: 'POST',
@@ -86,7 +100,9 @@ export async function askPet(args: {
         },
       }),
     });
+    if (cancelled()) return AI_CANCELLED;
     const data = await res.json().catch(() => null);
+    if (cancelled()) return AI_CANCELLED;
     if (res.ok && data?.reply) {
       return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday, ownKey: !!data.ownKey, declined: !!data.declined };
     }
@@ -94,10 +110,12 @@ export async function askPet(args: {
     if (res.status === 504 || res.status === 502) return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };
     return { ok: false, code: `http_${res.status}`, message: `Ошибка сервера (${res.status})`, retryable: true };
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };
+    if (cancelled()) return AI_CANCELLED;
+    if (timedOut || (e as Error).name === 'AbortError') return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };
     return NETWORK;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onUserAbort);
   }
 }
 
