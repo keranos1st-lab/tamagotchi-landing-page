@@ -10,26 +10,46 @@ g.localStorage = {
   clear: () => mem.clear(),
 };
 g.document = { visibilityState: 'visible', addEventListener() {}, removeEventListener() {} };
-g.window = { addEventListener() {}, removeEventListener() {}, localStorage: g.localStorage, innerWidth: 1280, innerHeight: 800 };
+const listeners = new Map<string, Set<() => void>>();
+const emit = (name: string) => listeners.get(name)?.forEach((f) => f());
+g.window = {
+  addEventListener: (n: string, f: () => void) => void (listeners.get(n) ?? listeners.set(n, new Set()).get(n)!).add(f),
+  removeEventListener: (n: string, f: () => void) => void listeners.get(n)?.delete(f),
+  localStorage: g.localStorage, innerWidth: 1280, innerHeight: 800 };
 
 let cloud: unknown & { rev: number };
-let saveMode: 'ok' | 'network' | 'conflict' | 'badRev' | 'hold' = 'ok';
+let saveMode: 'ok' | 'network' | 'conflict' | 'badRev' | 'hold' | 'http500' | 'http401' = 'ok';
+let readMode: 'ok' | 'network' = 'ok';
+let saves = 0;
+let reads = 0;
+let failFirst = 0;
 let release: (() => void) | null = null;
 g.fetch = async (url: string, init?: { body?: string }) => {
   const body = init?.body ? JSON.parse(init.body) : null;
   const json = (d: unknown, status = 200) => ({ ok: status < 400, status, json: async () => d });
   if (body?.action === 'sync_save') {
+    saves++;
+    if (failFirst > 0) {
+      failFirst--;
+      throw new TypeError('network');
+    }
+    if (saveMode === 'http500') return json({ error: 'server', message: 'Ошибка сервера' }, 500);
+    if (saveMode === 'http401') return json({ error: 'auth', message: 'Нужен вход' }, 401);
     if (saveMode === 'network') throw new TypeError('network');
     if (saveMode === 'conflict') return json({ error: 'conflict', server: cloud }, 409);
     if (saveMode === 'badRev') return json({});
     if (saveMode === 'hold') await new Promise<void>((r) => (release = r));
     return json({ rev: cloud.rev + 1 });
   }
-  if (String(url).includes('sync=1')) return json(cloud);
+  if (String(url).includes('sync=1')) {
+    reads++;
+    if (readMode === 'network') throw new TypeError('network');
+    return json(cloud);
+  }
   return json({ user: { id: 7, email: 'a@b.c', createdAt: '' } });
 };
 
-const { useSyncStore, resumeSession, localSignature, syncSignatures, push } = await import('./cloudSync');
+const { useSyncStore, resumeSession, localSignature, syncSignatures, push, retryConfig, cancelRetry } = await import('./cloudSync');
 const { usePetStore } = await import('@/store/petStore');
 const { useAuthStore } = await import('@/store/authStore');
 
@@ -49,8 +69,15 @@ beforeEach(() => {
   mem.clear();
   useAuthStore.setState({ token: 't', user: { id: 7, email: 'a@b.c', createdAt: '' } });
   useSyncStore.setState({ status: 'off', error: null, conflict: null, owner: null });
+  cancelRetry();
+  listeners.clear();
   saveMode = 'ok';
+  readMode = 'ok';
+  saves = 0;
+  reads = 0;
+  failFirst = 0;
   release = null;
+  retryConfig.delays = [0, 15, 30];
 });
 
 describe('resumeSession', () => {
@@ -144,6 +171,116 @@ describe('push({ keepalive: true })', () => {
     expect(owner?.rev).toBe(2);
     expect(owner?.sig).toBe(sent);
     expect(syncSignatures().lastSig).toBe(sent);
+    expect(localSignature()).not.toBe(syncSignatures().lastSig);
+  });
+});
+
+describe('online: повторная синхронизация', () => {
+  const settle = (ms = 250) => new Promise((r) => setTimeout(r, ms));
+  const offlineEdit = async () => {
+    const sig = await sigAt(40);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig } });
+    cloud = cloudWith(40, 1);
+    await resumeSession();
+    await setLocal(55);
+    saves = 0;
+    reads = 0;
+  };
+
+  test('изменения без интернета отправляются после восстановления связи', async () => {
+    await offlineEdit();
+    readMode = 'network';
+    saveMode = 'network';
+    emit('offline');
+    readMode = 'ok';
+    saveMode = 'ok';
+    emit('online');
+    await settle();
+    const owner = useSyncStore.getState().owner;
+    expect(saves).toBe(1);
+    expect(owner?.rev).toBe(2);
+    expect(localSignature()).toBe(owner?.sig);
+    expect(useSyncStore.getState().status).toBe('idle');
+  });
+
+  test('если облако изменилось за это время: конфликт, ничего не отправлено', async () => {
+    await offlineEdit();
+    cloud = cloudWith(10, 3);
+    emit('online');
+    await settle();
+    expect(useSyncStore.getState().conflict?.server.rev).toBe(3);
+    expect(saves).toBe(0);
+    expect(usePetStore.getState().exp).toBe(55);
+  });
+
+  test('временная ошибка: ровно три попытки и остановка, данные несинхронизированы', async () => {
+    await offlineEdit();
+    saveMode = 'http500';
+    emit('online');
+    await settle(400);
+    expect(saves).toBe(3);
+    expect(useSyncStore.getState().status).toBe('error');
+    expect(useSyncStore.getState().owner?.rev).toBe(1);
+    expect(localSignature()).not.toBe(syncSignatures().lastSig);
+    await settle(200);
+    expect(saves).toBe(3);
+  });
+
+  test('сеть пропала на двух попытках, третья успешна', async () => {
+    await offlineEdit();
+    failFirst = 2;
+    emit('online');
+    await settle(400);
+    expect(saves).toBe(3);
+    expect(useSyncStore.getState().owner?.rev).toBe(2);
+    expect(useSyncStore.getState().status).toBe('idle');
+  });
+
+  test('ошибка авторизации не повторяется', async () => {
+    await offlineEdit();
+    saveMode = 'http401';
+    emit('online');
+    await settle(300);
+    expect(saves).toBe(1);
+    expect(useAuthStore.getState().token).toBeNull();
+  });
+
+  test('повторные online не создают параллельные циклы и отправки', async () => {
+    await offlineEdit();
+    saveMode = 'hold';
+    emit('online');
+    emit('online');
+    emit('online');
+    await settle(60);
+    expect(saves).toBe(1);
+    release?.();
+    await settle(100);
+    emit('online');
+    await settle(100);
+    expect(saves).toBe(1);
+    expect(useSyncStore.getState().owner?.rev).toBe(2);
+  });
+
+  test('потеря связи останавливает повторы', async () => {
+    await offlineEdit();
+    saveMode = 'http500';
+    emit('online');
+    await settle(20);
+    emit('offline');
+    await settle(300);
+    expect(saves).toBeLessThan(3);
+  });
+
+  test('успешное чтение облака не скрывает ошибку несохранённых изменений', async () => {
+    await offlineEdit();
+    saveMode = 'http500';
+    emit('online');
+    await settle(400);
+    expect(useSyncStore.getState().status).toBe('error');
+    saveMode = 'ok';
+    const { pull } = await import('./cloudSync');
+    await pull();
+    expect(useSyncStore.getState().status).toBe('error');
     expect(localSignature()).not.toBe(syncSignatures().lastSig);
   });
 });

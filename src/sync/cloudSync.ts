@@ -101,6 +101,13 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let unsubs: Array<() => void> = [];
 let pushing: Promise<void> | null = null;
+let lastErrStatus: number | null = null;
+let cycle: Promise<void> | null = null;
+let cycleGen = 0;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
+let retryWake: (() => void) | null = null;
+
+export const retryConfig = { delays: [0, 3000, 10000] };
 
 const st = () => useSyncStore.getState();
 const currentUserId = () => useAuthStore.getState().user?.id ?? null;
@@ -192,6 +199,7 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
     } else if (r.status === 401) {
       handleExpired();
     } else {
+      lastErrStatus = r.status;
       st().set({ status: 'error', error: r.message });
     }
   })().finally(() => {
@@ -205,11 +213,15 @@ export async function pull(): Promise<void> {
   const r = await authCall<CloudState>(null, { query: '?sync=1' });
   if (!r.ok) {
     if (r.status === 401) handleExpired();
-    else st().set({ status: 'error', error: r.message });
+    else {
+      lastErrStatus = r.status;
+      st().set({ status: 'error', error: r.message });
+    }
     return;
   }
   if (r.rev <= baseRev()) {
-    st().set({ status: 'idle', error: null });
+    if (signature(readLocal(), false) === lastSig) st().set({ status: 'idle', error: null });
+    else if (st().status !== 'error') st().set({ status: 'idle' });
     return;
   }
   const known = st().owner?.userId === currentUserId() && st().owner?.sig !== undefined;
@@ -217,6 +229,58 @@ export async function pull(): Promise<void> {
   const dirty = known ? local !== lastSig : local !== cloudSignature(r);
   if (dirty) st().set({ conflict: { server: r, reason: 'remote' } });
   else await applyCloud(r);
+}
+
+const isDirty = () => signature(readLocal(), false) !== lastSig;
+const isTransient = () => lastErrStatus === 0 || lastErrStatus === 408 || lastErrStatus === 429 || (lastErrStatus !== null && lastErrStatus >= 500);
+
+function wait(ms: number): Promise<void> {
+  return new Promise((res) => {
+    retryWake = res;
+    retryTimer = setTimeout(() => {
+      retryWake = null;
+      res();
+    }, ms);
+  });
+}
+
+export function cancelRetry() {
+  cycleGen++;
+  cycle = null;
+  clearTimeout(retryTimer);
+  retryWake?.();
+  retryWake = null;
+}
+
+export function retrySync(): Promise<void> {
+  if (cycle) return cycle;
+  if (!useAuthStore.getState().token || st().conflict) return Promise.resolve();
+  const gen = ++cycleGen;
+  const uid = currentUserId();
+  const alive = () => gen === cycleGen && !!useAuthStore.getState().token && currentUserId() === uid && !st().conflict;
+  const run = (async () => {
+    for (let i = 0; i < retryConfig.delays.length; i++) {
+      if (retryConfig.delays[i] > 0) await wait(retryConfig.delays[i]);
+      if (!alive()) return;
+      if (pushing) await pushing;
+      if (!alive()) return;
+      lastErrStatus = null;
+      await pull();
+      if (!alive()) return;
+      if (lastErrStatus !== null) {
+        if (!isTransient()) return;
+        continue;
+      }
+      if (!isDirty()) return;
+      await push();
+      if (!alive()) return;
+      if (st().status !== 'error' || lastErrStatus === null || !isTransient()) return;
+    }
+  })().finally(() => {
+    if (gen === cycleGen) cycle = null;
+  });
+  cycle = run;
+  return run;
 }
 
 function schedule() {
@@ -241,11 +305,17 @@ function onVisibility() {
   }
 }
 
+function onOnline() {
+  void retrySync();
+}
+
 function start() {
   stop();
   unsubs = [usePetStore.subscribe(onStoreChange), useAchievementStore.subscribe(onStoreChange), useMemoryStore.subscribe(onStoreChange)];
   document.addEventListener('visibilitychange', onVisibility);
   window.addEventListener('pagehide', onVisibility);
+  window.addEventListener('online', onOnline);
+  window.addEventListener('offline', cancelRetry);
   pollTimer = setInterval(() => document.visibilityState === 'visible' && pull(), 60000);
 }
 
@@ -256,6 +326,9 @@ function stop() {
   clearInterval(pollTimer);
   document.removeEventListener('visibilitychange', onVisibility);
   window.removeEventListener('pagehide', onVisibility);
+  window.removeEventListener('online', onOnline);
+  window.removeEventListener('offline', cancelRetry);
+  cancelRetry();
 }
 
 function handleExpired() {
