@@ -9,6 +9,7 @@ import { speak, startRecording, stopSpeaking, transcribe, type Recording } from 
 
 let rec: Recording | null = null;
 let turn = 0;
+let sttCtrl: AbortController | null = null;
 
 const vs = () => useVoiceStore.getState();
 
@@ -45,6 +46,8 @@ export function voiceBusy() {
 
 export function cancelVoice() {
   turn++;
+  sttCtrl?.abort();
+  sttCtrl = null;
   rec?.cancel();
   rec = null;
   stopSpeaking();
@@ -60,6 +63,8 @@ export async function toggleVoice() {
 }
 
 async function startListening() {
+  sttCtrl?.abort();
+  sttCtrl = null;
   const my = ++turn;
   vs().set({ status: 'listening', heard: '', reply: '', note: null, level: 0 });
   return startRecorder(my);
@@ -97,8 +102,13 @@ async function finishListening() {
   if (!pcm || pcm.length < 16000 * 0.4) return fail('Я ничего не услышал — нажми на микрофон и скажи ещё раз');
 
   vs().set({ status: 'transcribing', level: 0 });
-  const heard = await transcribe(pcm);
-  if (turn !== my) return;
+  const ctrl = new AbortController();
+  sttCtrl = ctrl;
+  const heard = await transcribe(pcm, ctrl.signal).finally(() => {
+    if (sttCtrl === ctrl) sttCtrl = null;
+  });
+  if (turn !== my || ctrl.signal.aborted) return;
+  if (!heard.ok && 'cancelled' in heard) return vs().set({ status: 'idle', level: 0 });
   if (!heard.ok) return fail(sttMessage(heard.code, heard.message));
   if (!heard.text.trim()) return fail('Речь не распознана — попробуй ещё раз');
 

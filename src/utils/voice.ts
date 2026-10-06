@@ -131,11 +131,24 @@ function toBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-export async function transcribe(pcm: Int16Array): Promise<{ ok: true; text: string } | VoiceFail> {
+export const sttConfig = { timeoutMs: 20000 };
+
+export type VoiceCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
+const STT_CANCELLED: VoiceCancelled = { ok: false, cancelled: true, code: 'cancelled', message: 'Распознавание остановлено', retryable: false };
+
+export async function transcribe(pcm: Int16Array, signal?: AbortSignal): Promise<{ ok: true; text: string } | VoiceFail | VoiceCancelled> {
+  if (signal?.aborted) return STT_CANCELLED;
   if (pcm.byteLength > MAX_BYTES) return { ok: false, code: 'stt_too_big', message: 'Запись слишком большая — говорите не дольше 30 секунд', retryable: false };
   if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20000);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    ctrl.abort();
+  }, sttConfig.timeoutMs);
+  const onUserAbort = () => ctrl.abort();
+  signal?.addEventListener('abort', onUserAbort);
+  const cancelled = () => !!signal?.aborted;
   try {
     const res = await fetch(`${URL}?stt=1`, {
       method: 'POST',
@@ -143,15 +156,19 @@ export async function transcribe(pcm: Int16Array): Promise<{ ok: true; text: str
       headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId() },
       body: JSON.stringify({ audio: toBase64(new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength)), rate: TARGET_RATE }),
     });
+    if (cancelled()) return STT_CANCELLED;
     const data = await res.json().catch(() => null);
+    if (cancelled()) return STT_CANCELLED;
     if (res.ok && data?.text) return { ok: true, text: String(data.text) };
     if (data?.error) return { ok: false, code: data.error, message: data.message || 'Не удалось распознать речь', retryable: !!data.retryable };
     return { ok: false, code: `http_${res.status}`, message: `Ошибка сервера (${res.status})`, retryable: true };
   } catch (e) {
-    if ((e as Error).name === 'AbortError') return { ok: false, code: 'timeout', message: 'Распознавание не успело ответить', retryable: true };
+    if (cancelled()) return STT_CANCELLED;
+    if (timedOut || (e as Error).name === 'AbortError') return { ok: false, code: 'timeout', message: 'Распознавание не успело ответить', retryable: true };
     return NETWORK;
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onUserAbort);
   }
 }
 
