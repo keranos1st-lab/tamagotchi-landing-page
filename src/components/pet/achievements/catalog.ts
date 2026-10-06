@@ -27,6 +27,9 @@ export interface Achievement {
 
 const n = (x: Ctx, k: Counter) => x.c[k] ?? 0;
 
+export const CURRENT_GAMES = ['chase', 'tetris', 'memory', 'quiz', 'snake', 'tictactoe', 'reaction'] as const;
+const playedCurrentGames = (x: Ctx) => new Set(x.gamesPlayed.filter((g) => (CURRENT_GAMES as readonly string[]).includes(g))).size;
+
 export const RARITY: Record<Rarity, { label: string; ring: string; glow: string; text: string; grad: string; chip: string }> = {
   common: {
     label: 'Обычная',
@@ -89,7 +92,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'old_timer', title: 'Старожил', desc: 'Проживи вместе 3 часа', icon: 'Hourglass', rarity: 'rare', category: 'growth', xp: 60, goal: 180, value: (x) => x.pet.age },
 
   { id: 'gamer', title: 'Игрок', desc: 'Сыграй 10 партий в мини-игры', icon: 'Gamepad2', rarity: 'common', category: 'games', xp: 20, goal: 10, value: (x) => n(x, 'games') },
-  { id: 'all_games', title: 'Всё перепробовал', desc: 'Сыграй в каждую из 7 мини-игр', icon: 'Shapes', rarity: 'rare', category: 'games', xp: 60, goal: 7, value: (x) => x.gamesPlayed.length },
+  { id: 'all_games', title: 'Всё перепробовал', desc: 'Сыграй в каждую из 7 мини-игр', icon: 'Shapes', rarity: 'rare', category: 'games', xp: 60, goal: 7, value: playedCurrentGames },
   { id: 'champion', title: 'Чемпион', desc: 'Одержи 25 побед в играх', icon: 'Trophy', rarity: 'epic', category: 'games', xp: 120, goal: 25, value: (x) => n(x, 'gameWins') },
   { id: 'quiz_ace', title: 'Отличник', desc: 'Ответь на все вопросы викторины', icon: 'GraduationCap', rarity: 'rare', category: 'games', xp: 50, goal: 1, value: (x) => n(x, 'quizPerfect') },
   { id: 'ttt_master', title: 'Стратег', desc: 'Обыграй питомца в крестики-нолики 5 раз', icon: 'Grid3x3', rarity: 'rare', category: 'games', xp: 50, goal: 5, value: (x) => n(x, 'tttWins') },
