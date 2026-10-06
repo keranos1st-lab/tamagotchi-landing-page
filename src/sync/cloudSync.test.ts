@@ -17,7 +17,7 @@ g.window = {
   removeEventListener: (n: string, f: () => void) => void listeners.get(n)?.delete(f),
   localStorage: g.localStorage, innerWidth: 1280, innerHeight: 800 };
 
-let cloud: unknown & { rev: number };
+let cloud: { rev: number; [k: string]: unknown };
 let saveMode: 'ok' | 'network' | 'conflict' | 'badRev' | 'hold' | 'http500' | 'http401' = 'ok';
 let readMode: 'ok' | 'network' = 'ok';
 let saves = 0;
@@ -51,6 +51,8 @@ g.fetch = async (url: string, init?: { body?: string }) => {
 
 const { useSyncStore, resumeSession, localSignature, syncSignatures, push, retryConfig, cancelRetry } = await import('./cloudSync');
 const { usePetStore } = await import('@/store/petStore');
+const { useMemoryStore } = await import('@/store/memoryStore');
+const { resolveConflict } = await import('./cloudSync');
 const { useAuthStore } = await import('@/store/authStore');
 
 const petSave = (exp: number) => ({ state: { hasSelectedPet: true, type: 'cat', name: 'Т', level: 2, exp, bornAt: 1, chatHistory: [] }, version: 2 });
@@ -282,5 +284,91 @@ describe('online: повторная синхронизация', () => {
     await pull();
     expect(useSyncStore.getState().status).toBe('error');
     expect(localSignature()).not.toBe(syncSignatures().lastSig);
+  });
+});
+
+describe('пустая облачная память', () => {
+  const settle = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  const memSave = (text: string) => ({
+    state: { consent: true, items: [{ id: 'a', text, category: 'other', createdAt: 1, updatedAt: 1 }], pending: null },
+    version: 1,
+  });
+  const setLocalMemory = async (text: string, pending = false) => {
+    const m = memSave(text);
+    if (pending) m.state.pending = { id: 'p', text: 'ожидающий факт' } as never;
+    localStorage.setItem('petagent-memory', JSON.stringify(m));
+    await useMemoryStore.persist.rehydrate();
+  };
+
+  test('облако memory: null очищает факты, согласие и ожидающий факт в store и localStorage', async () => {
+    await setLocalMemory('любит чай', true);
+    const sig = await sigAt(40);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig } });
+    expect(useMemoryStore.getState().items.length).toBe(1);
+    cloud = { ...cloudWith(40, 2), memory: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    const m = useMemoryStore.getState();
+    expect(m.items).toEqual([]);
+    expect(m.consent).toBeNull();
+    expect(m.pending).toBeNull();
+    const raw = localStorage.getItem('petagent-memory');
+    expect(raw === null || (JSON.parse(raw).state.items as unknown[]).length === 0).toBe(true);
+    expect(useSyncStore.getState().conflict).toBeNull();
+  });
+
+  test('после повторной гидратации память остаётся пустой', async () => {
+    await setLocalMemory('любит чай', true);
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), memory: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    await useMemoryStore.persist.rehydrate();
+    expect(useMemoryStore.getState().items).toEqual([]);
+    expect(useMemoryStore.getState().pending).toBeNull();
+    expect(useMemoryStore.getState().consent).toBeNull();
+    await settle();
+    const raw = localStorage.getItem('petagent-memory');
+    expect(raw === null || (JSON.parse(raw).state.items as unknown[]).length === 0).toBe(true);
+  });
+
+  test('сброс не запускает обратную отправку старых фактов', async () => {
+    await setLocalMemory('любит чай');
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), memory: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    saves = 0;
+    await resumeSession();
+    await settle(4300);
+    expect(saves).toBe(0);
+  });
+
+  test('конфликт: локальный факт сохраняется до выбора, выбор облака очищает его', async () => {
+    await setLocalMemory('любит чай');
+    const base = localSignature();
+    await setLocal(55);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: base } });
+    cloud = { ...cloudWith(10, 2), memory: null };
+    await resumeSession();
+    expect(useSyncStore.getState().conflict).not.toBeNull();
+    expect(useMemoryStore.getState().items.length).toBe(1);
+    expect(localStorage.getItem('petagent-memory')).not.toBeNull();
+    await resolveConflict('cloud');
+    expect(useMemoryStore.getState().items).toEqual([]);
+    expect(useMemoryStore.getState().consent).toBeNull();
+    const raw = localStorage.getItem('petagent-memory');
+    expect(raw === null || (JSON.parse(raw).state.items as unknown[]).length === 0).toBe(true);
+    expect(usePetStore.getState().exp).toBe(10);
+  });
+
+  test('непустая облачная память загружается правильно', async () => {
+    await setLocalMemory('старый факт');
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), memory: memSave('новый факт') };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    expect(useMemoryStore.getState().items.map((i) => i.text)).toEqual(['новый факт']);
+    expect(useMemoryStore.getState().consent).toBe(true);
+    expect(JSON.parse(localStorage.getItem('petagent-memory')!).state.items[0].text).toBe('новый факт');
   });
 });

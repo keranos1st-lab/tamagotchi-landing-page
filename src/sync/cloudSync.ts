@@ -136,6 +136,10 @@ async function applyCloud(c: CloudState) {
     });
     if (!c.pet) usePetStore.setState({ hasSelectedPet: false });
     await Promise.all([usePetStore.persist.rehydrate(), useAchievementStore.persist.rehydrate(), useMemoryStore.persist.rehydrate()]);
+    if (!c.memory) {
+      useMemoryStore.setState({ items: [], consent: null, pending: null });
+      localStorage.removeItem(KEYS.memory);
+    }
     usePetStore.getState().advance();
   } finally {
     const snap = readLocal();
