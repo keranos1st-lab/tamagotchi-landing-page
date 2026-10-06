@@ -21,6 +21,8 @@ import urllib.request
 
 import psycopg2
 
+import websearch
+
 API_URL = 'https://polza.ai/api/v1/chat/completions'
 DEFAULT_MODEL = 'openai/gpt-4o-mini'
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
@@ -35,6 +37,11 @@ PER_DAY_CLIENT = int(os.environ.get('PET_AI_DAILY_PER_USER') or 60)
 PER_DAY_IP = int(os.environ.get('PET_AI_DAILY_PER_IP') or 150)
 DAILY_BUDGET_RUB = float(os.environ.get('PET_AI_DAILY_BUDGET_RUB') or 150)
 EST_COST = 0.3
+SEARCH_MAX_TOKENS = 700
+SEARCH_TIMEOUT = 30
+SEARCH_PROMPT_RUB_PER_M = 118.986
+SEARCH_COMPLETION_RUB_PER_M = 118.986
+SEARCH_FEE_RUB = 0.595
 
 CORS = {
     'Access-Control-Allow-Origin': '*',
@@ -138,6 +145,8 @@ ERRORS = {
     'too_long': 'Сообщение слишком длинное',
     'empty': 'Пустое сообщение',
     'timeout': 'AI не успел ответить',
+    'search_failed': 'Свежие данные получить не удалось — попробуй ещё раз чуть позже. Отвечать наугад я не буду.',
+    'search_unavailable': 'Поиск свежих данных работает через сервер PetAgent или ключ Polza — с твоим ключом этого сервиса получить свежие данные не получится.',
     'provider_error': 'Сервис AI временно недоступен',
     'provider_busy': 'Сервис AI перегружен',
     'bad_request': 'Некорректный запрос',
@@ -771,6 +780,7 @@ def status_info(client_id: str, ip: str) -> dict:
     info = {
         'configured': bool(os.environ.get('POLZA_AI_API_KEY')),
         'model': os.environ.get('POLZA_AI_MODEL') or DEFAULT_MODEL,
+        'searchModel': search_model(),
         'limits': {'perMinute': PER_MINUTE, 'perDay': PER_DAY_CLIENT, 'maxMessage': MAX_MESSAGE, 'maxSource': MAX_SOURCE},
     }
     try:
@@ -782,6 +792,121 @@ def status_info(client_id: str, ip: str) -> dict:
         print(f'status db error: {e}')
         info['dbOk'] = False
     return info
+
+
+def search_model() -> str:
+    return (os.environ.get('POLZA_AI_SEARCH_MODEL') or '').strip() or websearch.SEARCH_MODEL_DEFAULT
+
+
+def call_search(messages: list, own: dict | None) -> tuple:
+    if own:
+        url, key = own['url'], own['key']
+    else:
+        url, key = API_URL, os.environ['POLZA_AI_API_KEY']
+    payload = json.dumps({
+        'model': search_model(),
+        'messages': messages,
+        'max_tokens': SEARCH_MAX_TOKENS,
+        'temperature': 0.2,
+    }).encode('utf-8')
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json', 'HTTP-Referer': 'https://petagent.app', 'X-Title': 'PetAgent'},
+        method='POST',
+    )
+    with urllib.request.urlopen(req, timeout=SEARCH_TIMEOUT) as resp:
+        return json.loads(resp.read().decode('utf-8')), resp.status
+
+
+def search_cost(usage_info: dict) -> tuple:
+    pt = int(usage_info.get('prompt_tokens') or 0)
+    ct = int(usage_info.get('completion_tokens') or 0)
+    est = pt * SEARCH_PROMPT_RUB_PER_M / 1e6 + ct * SEARCH_COMPLETION_RUB_PER_M / 1e6 + SEARCH_FEE_RUB
+    reported = usage_info.get('cost')
+    reported = float(reported) if isinstance(reported, (int, float)) and not isinstance(reported, bool) else None
+    return (max(reported, est) if reported is not None else est), reported, est
+
+
+def handle_search(sr: dict, message: str, pet: dict, iq, voice: bool, data: dict, client_id: str, ip: str, own: dict | None, u: dict, started_all: float) -> dict:
+    is_own = own is not None
+    ptype = pet.get('type') if pet.get('type') in PERSONAS else 'cat'
+    persona, traits = PERSONAS[ptype]
+    name = str(pet.get('name') or 'Питомец')[:40]
+    sound = IQ_SOUND.get(ptype, '')
+    base = {'ownKey': is_own, 'model': None, 'declined': False, 'truncated': False, 'remember': None, 'iq': int(iq) if iq is not None else None,
+            'iqLevel': iq_level(iq) if iq is not None else None, 'searched': False}
+
+    ask = websearch.clarification(sr['intent'], message, data.get('history') or [], sr['context'])
+    if ask:
+        log(client_id, ip, 'search', 'clarify', 0, 0, 0.0, is_own)
+        return respond(200, {
+            **base,
+            'reply': f'{sound} {ask}'.strip(),
+            'clarify': True,
+            'complexity': None,
+            'remainingToday': None if is_own else max(0, PER_DAY_CLIENT - u['day']),
+            'ms': int((time.time() - started_all) * 1000),
+        })
+
+    if is_own and own.get('provider') != 'polza':
+        log(client_id, ip, 'search', 'no_search', 0, 0, 0.0, True)
+        return fail(400, 'search_unavailable', False)
+
+    now = websearch.now_info(data.get('timezone'), data.get('tzOffset'))
+    iq_line = iq_rules(iq, iq_level(iq), False) if iq is not None else ''
+    system = websearch.build_system(persona, traits, name, now, iq_line, voice)
+    messages = websearch.build_messages(system, sr['context'], message)
+
+    started = time.time()
+    try:
+        result, _ = call_search(messages, own)
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:300]
+        print(f'search HTTP {e.code}' + ('' if is_own else f': {detail}'))
+        code = map_http_error(e.code, detail, is_own)
+        code = code if code in ('no_balance', 'bad_key', 'own_no_balance', 'own_bad_key') else 'search_failed'
+        log(client_id, ip, 'search', 'search_error', own=is_own)
+        return fail(502, code, code == 'search_failed')
+    except Exception as e:
+        print(f'search error after {time.time() - started:.1f}s: {type(e).__name__}')
+        log(client_id, ip, 'search', 'search_error', own=is_own)
+        return fail(504, 'search_failed', True)
+
+    choice = (result.get('choices') or [{}])[0]
+    raw_reply = (choice.get('message') or {}).get('content') or ''
+    usage_info = result.get('usage') or {}
+    pt = int(usage_info.get('prompt_tokens') or 0)
+    ct = int(usage_info.get('completion_tokens') or 0)
+    cost, reported, est = search_cost(usage_info)
+    cost = 0.0 if is_own else cost
+    sources, kinds = websearch.extract_sources(result)
+    print(f'search ok model={result.get("model")} top_keys={sorted(result.keys())} usage={json.dumps(usage_info, ensure_ascii=False)[:400]} sources={len(sources)} via={kinds} cost_reported={reported} cost_est={est:.4f}')
+    reply = websearch.clean_reply(raw_reply)
+    if not reply:
+        log(client_id, ip, 'search', 'empty_reply', pt, ct, cost, is_own)
+        return fail(502, 'search_failed', True)
+
+    verified = bool(sources)
+    if not verified:
+        reply += websearch.UNVERIFIED_NOTE
+    log(client_id, ip, 'search', 'ok', pt, ct, cost, is_own)
+    body = {
+        **base,
+        'reply': reply,
+        'model': result.get('model') or search_model(),
+        'searched': True,
+        'sources': sources,
+        'verified': verified,
+        'asOf': now['iso'],
+        'spoken': websearch.spoken_summary(raw_reply if voice else reply) or None,
+        'truncated': choice.get('finish_reason') == 'length',
+        'complexity': None,
+        'ms': int((time.time() - started) * 1000),
+    }
+    if not is_own:
+        body['remainingToday'] = max(0, PER_DAY_CLIENT - u['day'] - 1)
+    return respond(200, body)
 
 
 def handler(event: dict, context) -> dict:
@@ -881,6 +1006,11 @@ def handler(event: dict, context) -> dict:
             return fail(429, 'daily_ip', False)
         if u['spent'] >= DAILY_BUDGET_RUB:
             return fail(429, 'budget', False)
+
+    if not task:
+        sr = websearch.route(message, data.get('history') or [])
+        if sr['search']:
+            return handle_search(sr, message, pet, iq, voice, data, client_id, ip, own, u, started_all)
 
     complexity = None
     if iq is not None and iq_level(iq) != 'genius':

@@ -15,6 +15,11 @@ export interface ChatMessage {
   timestamp: number;
   kind?: 'ai' | 'error' | 'legacy' | 'task';
   declined?: boolean;
+  searched?: boolean;
+  verified?: boolean;
+  asOf?: string;
+  spoken?: string;
+  sources?: { title: string; url: string; domain: string; date?: string }[];
   task?: { action: TextAction; source: string };
   error?: { code: string; message: string; retryable: boolean };
   retry?: { message: string; task?: { action: TextAction; source: string } };

@@ -2,7 +2,21 @@ import func2url from '../../backend/func2url.json';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
 import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
 
-export type AiOk = { ok: true; reply: string; remember: string | null; truncated: boolean; remainingToday?: number; ownKey?: boolean; declined?: boolean };
+export type AiSource = { title: string; url: string; domain: string; date?: string };
+export type AiOk = {
+  ok: true;
+  reply: string;
+  remember: string | null;
+  truncated: boolean;
+  remainingToday?: number;
+  ownKey?: boolean;
+  declined?: boolean;
+  searched?: boolean;
+  verified?: boolean;
+  sources?: AiSource[];
+  spoken?: string;
+  asOf?: string;
+};
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
 export type AiResult = AiOk | AiErr | AiCancelled;
@@ -38,6 +52,14 @@ export function clientId(): string {
     localStorage.setItem(k, id);
   }
   return id;
+}
+
+function userTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 const NETWORK: AiErr = { ok: false, code: 'network', message: 'Нет связи с сервером', retryable: true };
@@ -85,6 +107,8 @@ export async function askPet(args: {
         message,
         task,
         voice: voice || undefined,
+        timezone: userTimezone(),
+        tzOffset: -new Date().getTimezoneOffset(),
         memory,
         history: history
           .filter((m) => m.kind !== 'error' && m.kind !== 'legacy')
@@ -104,7 +128,20 @@ export async function askPet(args: {
     const data = await res.json().catch(() => null);
     if (cancelled()) return AI_CANCELLED;
     if (res.ok && data?.reply) {
-      return { ok: true, reply: data.reply, remember: data.remember ?? null, truncated: !!data.truncated, remainingToday: data.remainingToday, ownKey: !!data.ownKey, declined: !!data.declined };
+      return {
+        ok: true,
+        reply: data.reply,
+        remember: data.remember ?? null,
+        truncated: !!data.truncated,
+        remainingToday: data.remainingToday,
+        ownKey: !!data.ownKey,
+        declined: !!data.declined,
+        searched: data.searched || undefined,
+        verified: data.searched ? !!data.verified : undefined,
+        sources: Array.isArray(data.sources) && data.sources.length ? data.sources : undefined,
+        spoken: typeof data.spoken === 'string' && data.spoken ? data.spoken : undefined,
+        asOf: typeof data.asOf === 'string' ? data.asOf : undefined,
+      };
     }
     if (data?.error) return { ok: false, code: data.error, message: data.message || 'Ошибка AI', retryable: !!data.retryable };
     if (res.status === 504 || res.status === 502) return { ok: false, code: 'timeout', message: 'AI не успел ответить', retryable: true };

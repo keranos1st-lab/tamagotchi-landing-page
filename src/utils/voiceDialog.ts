@@ -154,13 +154,22 @@ async function askAndSpeak(my: number, text: string) {
     return fail(own || !res.code.startsWith('daily') ? res.message : 'Дневной лимит AI исчерпан');
   }
 
-  usePetStore.getState().addChatMessage('pet', res.reply, { kind: 'ai', declined: res.declined });
+  usePetStore.getState().addChatMessage('pet', res.reply, {
+    kind: 'ai',
+    declined: res.declined,
+    searched: res.searched,
+    verified: res.verified,
+    sources: res.sources,
+    spoken: res.spoken,
+    asOf: res.asOf,
+  });
   usePetStore.getState().earn('chat', res.declined ? 1 : 3);
   useThinkingStore.getState().cheer();
   if (res.remember) mem.propose(res.remember);
 
-  vs().set({ status: 'speaking', reply: res.reply });
-  const said = await speak(res.reply);
+  const toSay = res.spoken ?? res.reply;
+  vs().set({ status: 'speaking', reply: toSay });
+  const said = await speak(toSay);
   if (turn !== my) return;
   if (!said.ok && said.cancelled) return vs().set({ status: 'idle' });
   vs().set({

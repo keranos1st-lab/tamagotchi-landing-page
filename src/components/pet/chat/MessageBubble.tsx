@@ -23,6 +23,35 @@ function CopyBtn({ text }: { text: string }) {
   );
 }
 
+function SourcesList({ sources, verified }: { sources: NonNullable<ChatMessage['sources']>; verified?: boolean }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? sources : sources.slice(0, 3);
+  return (
+    <div className="mt-2 rounded-xl border border-sky-300/20 bg-sky-400/[0.06] px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-sky-200/80">
+        <Icon name="Globe" size={11} />
+        Источники
+        {verified === false && <span className="ml-1 normal-case tracking-normal text-amber-300/80">не подтверждено</span>}
+      </div>
+      <ul className="mt-1 space-y-0.5">
+        {shown.map((s) => (
+          <li key={s.url} className="min-w-0 text-xs leading-snug">
+            <a href={s.url} target="_blank" rel="noopener noreferrer nofollow" className="flex min-w-0 items-baseline gap-1.5 text-sky-100/90 hover:text-white hover:underline">
+              <span className="shrink-0 font-bold text-sky-200/70">{s.domain}</span>
+              <span className="truncate text-white/60">{s.title !== s.domain ? s.title : ''}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+      {sources.length > 3 && (
+        <button onClick={() => setAll(!all)} className="mt-1 text-[11px] font-bold text-sky-200/80 hover:text-white">
+          {all ? 'свернуть' : `ещё ${sources.length - 3}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function SpeakBtn({ text }: { text: string }) {
   const status = useVoiceStore((s) => s.status);
   const reply = useVoiceStore((s) => s.reply);
@@ -134,6 +163,7 @@ export function MessageBubble({
           </div>
         )}
         <RichText text={msg.text} />
+        {msg.searched && msg.sources && msg.sources.length > 0 && <SourcesList sources={msg.sources} verified={msg.verified} />}
         <div className="mt-2 flex items-center gap-3">
           {msg.kind === 'legacy' ? (
             <span className="text-[10px] font-semibold text-white/35">Шаблонный ответ из старой версии — не AI</span>
@@ -142,6 +172,11 @@ export function MessageBubble({
               <Icon name="GraduationCap" size={10} />
               Нужно подрасти — «Обучать» поднимает IQ
             </span>
+          ) : msg.searched ? (
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-sky-300/70">
+              <Icon name="Globe" size={10} />
+              Поиск в интернете
+            </span>
           ) : (
             <span className="flex items-center gap-1 text-[10px] font-semibold text-emerald-300/60">
               <Icon name="Sparkles" size={10} />
@@ -149,7 +184,7 @@ export function MessageBubble({
             </span>
           )}
           <CopyBtn text={msg.text} />
-          {msg.kind !== 'legacy' && <SpeakBtn text={msg.text} />}
+          {msg.kind !== 'legacy' && <SpeakBtn text={msg.spoken ?? msg.text} />}
         </div>
       </div>
     </div>

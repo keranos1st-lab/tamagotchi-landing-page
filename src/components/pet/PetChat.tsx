@@ -84,8 +84,17 @@ export function PetChat() {
       task,
     });
     if (res.ok) {
-      addChatMessage('pet', res.truncated ? `${res.reply}\n\n_(ответ обрезан по длине — попроси продолжить)_` : res.reply, { kind: 'ai', task, declined: res.declined });
-      if (useVoiceStore.getState().speakReplies && !task) speakText(res.reply);
+      addChatMessage('pet', res.truncated ? `${res.reply}\n\n_(ответ обрезан по длине — попроси продолжить)_` : res.reply, {
+        kind: 'ai',
+        task,
+        declined: res.declined,
+        searched: res.searched,
+        verified: res.verified,
+        sources: res.sources,
+        spoken: res.spoken,
+        asOf: res.asOf,
+      });
+      if (useVoiceStore.getState().speakReplies && !task) speakText(res.spoken ?? res.reply);
       earn(task ? 'help' : 'chat', res.declined ? 1 : task ? 6 : 3);
       useThinkingStore.getState().cheer();
       if (res.remember) mem.propose(res.remember);

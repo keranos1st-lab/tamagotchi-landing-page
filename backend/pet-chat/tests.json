@@ -116,6 +116,40 @@
         "iqLevel": "baby"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Погода без города — уточнение, без поиска",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "message": "Какая погода сегодня?",
+        "pet": {
+          "type": "cat",
+          "name": "Кодик"
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "clarify": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Рейс без города вылета — уточнение",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "message": "Когда вылетает мой рейс завтра?",
+        "pet": {
+          "type": "cat",
+          "name": "Кодик"
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "clarify": true
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }
