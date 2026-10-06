@@ -368,9 +368,23 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
   const playedGame = usePetStore((s) => s.playedGame);
   const [gained, setGained] = useState<number | null>(null);
   const scoreRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const lockedRef = useRef(false);
+  const finishedRef = useRef(false);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      clearTimeout(timerRef.current);
+      timerRef.current = undefined;
+    };
+  }, []);
 
   const handleAnswer = (index: number) => {
-    if (selected !== null) return;
+    if (selected !== null || lockedRef.current || finishedRef.current || !aliveRef.current) return;
+    lockedRef.current = true;
     setSelected(index);
 
     if (index === questions[currentQ].correct) {
@@ -381,8 +395,12 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
       sfx.bad();
     }
 
-    setTimeout(() => {
+    timerRef.current = setTimeout(() => {
+      timerRef.current = undefined;
+      if (!aliveRef.current) return;
       if (currentQ + 1 >= questions.length) {
+        if (finishedRef.current) return;
+        finishedRef.current = true;
         setGameOver(true);
         {
           const final = scoreRef.current;
@@ -396,6 +414,7 @@ function QuizGame({ onComplete }: { onComplete: () => void }) {
       } else {
         setCurrentQ(q => q + 1);
         setSelected(null);
+        lockedRef.current = false;
       }
     }, 1500);
   };
