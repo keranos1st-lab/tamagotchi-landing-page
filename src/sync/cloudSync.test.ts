@@ -23,10 +23,29 @@ let readMode: 'ok' | 'network' = 'ok';
 let saves = 0;
 let reads = 0;
 let failFirst = 0;
+type Gate = { kind: 'read' | 'save' | 'me'; token: string; status: number; payload: unknown; open: () => void; started: boolean };
+let gate: Gate | null = null;
+const holdRequest = (kind: Gate['kind'], token: string, status: number, payload: unknown) =>
+  new Promise<Gate>((resolveGate) => {
+    const g2 = { kind, token, status, payload, started: false } as Gate;
+    g2.open = () => {};
+    gate = g2;
+    resolveGate(g2);
+  });
+let gateRelease: (() => void) | null = null;
 let release: (() => void) | null = null;
-g.fetch = async (url: string, init?: { body?: string }) => {
+g.fetch = async (url: string, init?: { body?: string; headers?: Record<string, string> }) => {
   const body = init?.body ? JSON.parse(init.body) : null;
   const json = (d: unknown, status = 200) => ({ ok: status < 400, status, json: async () => d });
+  const kind: Gate['kind'] = body?.action === 'sync_save' ? 'save' : String(url).includes('sync=1') ? 'read' : 'me';
+  const gt = gate;
+  if (gt && !gt.started && gt.kind === kind && gt.token === init?.headers?.['X-Auth-Token']) {
+    gt.started = true;
+    await new Promise<void>((r) => (gateRelease = r));
+    gate = null;
+    if (kind === 'save') saves++;
+    return json(gt.payload, gt.status);
+  }
   if (body?.action === 'sync_save') {
     saves++;
     if (failFirst > 0) {
@@ -49,11 +68,11 @@ g.fetch = async (url: string, init?: { body?: string }) => {
   return json({ user: { id: 7, email: 'a@b.c', createdAt: '' } });
 };
 
-const { useSyncStore, resumeSession, localSignature, syncSignatures, push, retryConfig, cancelRetry } = await import('./cloudSync');
+const { useSyncStore, resumeSession, localSignature, syncSignatures, push, pull, retryConfig, cancelRetry } = await import('./cloudSync');
 const { usePetStore } = await import('@/store/petStore');
 const { useMemoryStore } = await import('@/store/memoryStore');
 const { useAchievementStore } = await import('@/store/achievementStore');
-const { resolveConflict } = await import('./cloudSync');
+const { resolveConflict, connectAfterLogin } = await import('./cloudSync');
 const { useAuthStore } = await import('@/store/authStore');
 
 const petSave = (exp: number) => ({ state: { hasSelectedPet: true, type: 'cat', name: 'Т', level: 2, exp, bornAt: 1, chatHistory: [] }, version: 2 });
@@ -72,6 +91,8 @@ beforeEach(() => {
   mem.clear();
   useAuthStore.setState({ token: 't', user: { id: 7, email: 'a@b.c', createdAt: '' } });
   useSyncStore.setState({ status: 'off', error: null, conflict: null, owner: null });
+  gate = null;
+  gateRelease = null;
   cancelRetry();
   listeners.clear();
   saveMode = 'ok';
@@ -468,5 +489,163 @@ describe('пустые облачные достижения', () => {
     expect(usePetStore.getState().exp).toBe(40);
     expect(usePetStore.getState().level).toBe(2);
     expect(useSyncStore.getState().owner?.rev).toBe(2);
+  });
+});
+
+describe('запоздалые ответы старой сессии', () => {
+  const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
+  const userB = { id: 8, email: 'b@b.c', createdAt: '' };
+  const startA = async () => {
+    const sig = await sigAt(40);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig } });
+    cloud = cloudWith(40, 1);
+    await resumeSession();
+    return sig;
+  };
+  const switchToB = async () => {
+    useAuthStore.setState({ token: 'tB', user: userB });
+    const sigB = await sigAt(77);
+    useSyncStore.setState({ owner: { userId: 8, rev: 5, sig: sigB }, status: 'idle', error: null, conflict: null });
+    return sigB;
+  };
+  const release2 = async () => {
+    gateRelease?.();
+    await settle();
+  };
+
+  test('ответ pull аккаунта А после входа в Б не меняет данные Б', async () => {
+    await startA();
+    await holdRequest('read', 't', 200, cloudWith(10, 9));
+    const p = pull();
+    await settle(10);
+    const sigB = await switchToB();
+    await release2();
+    await p;
+    expect(usePetStore.getState().exp).toBe(77);
+    expect(JSON.parse(localStorage.getItem('petagent-save')!).state.exp).toBe(77);
+    const s2 = useSyncStore.getState();
+    expect(s2.owner).toEqual({ userId: 8, rev: 5, sig: sigB });
+    expect(s2.conflict).toBeNull();
+    expect(s2.status).toBe('idle');
+  });
+
+  test('успех push аккаунта А не меняет состояние Б', async () => {
+    await startA();
+    await setLocal(55);
+    await holdRequest('save', 't', 200, { rev: 2 });
+    const p = push();
+    await settle(10);
+    const sigB = await switchToB();
+    await release2();
+    await p;
+    expect(useSyncStore.getState().owner).toEqual({ userId: 8, rev: 5, sig: sigB });
+    expect(syncSignatures().lastSig).not.toBe(sigB === '' ? 'x' : '\u0000');
+    expect(useSyncStore.getState().status).toBe('idle');
+  });
+
+  test('конфликт push аккаунта А не создаёт конфликт у Б', async () => {
+    await startA();
+    await setLocal(55);
+    await holdRequest('save', 't', 409, { error: 'conflict', server: cloudWith(10, 9) });
+    const p = push();
+    await settle(10);
+    await switchToB();
+    await release2();
+    await p;
+    expect(useSyncStore.getState().conflict).toBeNull();
+    expect(usePetStore.getState().exp).toBe(77);
+  });
+
+  test('ошибка push аккаунта А не показывает ошибку у Б', async () => {
+    await startA();
+    await setLocal(55);
+    await holdRequest('save', 't', 500, { error: 'server', message: 'Ошибка сервера' });
+    const p = push();
+    await settle(10);
+    await switchToB();
+    await release2();
+    await p;
+    expect(useSyncStore.getState().status).toBe('idle');
+    expect(useSyncStore.getState().error).toBeNull();
+  });
+
+  test('старый ответ 401 не разлогинивает Б', async () => {
+    await startA();
+    await holdRequest('read', 't', 401, { error: 'auth', message: 'Нужен вход' });
+    const p = pull();
+    await settle(10);
+    await switchToB();
+    await release2();
+    await p;
+    expect(useAuthStore.getState().token).toBe('tB');
+    expect(useAuthStore.getState().user?.id).toBe(8);
+    expect(useSyncStore.getState().status).toBe('idle');
+  });
+
+  test('ответ resumeSession после выхода не восстанавливает сессию', async () => {
+    await sigAt(40);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    useAuthStore.setState({ user: null });
+    cloud = cloudWith(40, 1);
+    await holdRequest('me', 't', 200, { user: { id: 7, email: 'a@b.c', createdAt: '' } });
+    const p = resumeSession();
+    await settle(10);
+    useAuthStore.setState({ token: null, user: null });
+    await release2();
+    await p;
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(useAuthStore.getState().user).toBeNull();
+    expect(reads).toBe(0);
+  });
+
+  test('ответ connectAfterLogin аккаунта А после входа в Б не меняет Б', async () => {
+    await startA();
+    await holdRequest('read', 't', 200, cloudWith(10, 9));
+    const p = connectAfterLogin(false);
+    await settle(10);
+    const sigB = await switchToB();
+    await release2();
+    await p;
+    expect(usePetStore.getState().exp).toBe(77);
+    expect(useSyncStore.getState().owner).toEqual({ userId: 8, rev: 5, sig: sigB });
+    expect(useSyncStore.getState().conflict).toBeNull();
+  });
+
+  test('завершение старого push не сбрасывает блокировку нового push', async () => {
+    await startA();
+    await setLocal(55);
+    await holdRequest('save', 't', 200, { rev: 2 });
+    const pA = push();
+    await settle(10);
+    await switchToB();
+    await setLocal(78);
+    saveMode = 'hold';
+    saves = 0;
+    const pB1 = push();
+    await settle(10);
+    gateRelease?.();
+    await pA;
+    saves = 0;
+    const pB2 = push();
+    await settle(10);
+    expect(saves).toBe(0);
+    release?.();
+    await Promise.all([pB1, pB2]);
+    expect(saves).toBe(0);
+    expect(useSyncStore.getState().owner?.userId).toBe(8);
+    expect(useSyncStore.getState().owner?.rev).toBe(2);
+  });
+
+  test('запросы текущей сессии продолжают работать', async () => {
+    await startA();
+    await setLocal(55);
+    await push();
+    expect(useSyncStore.getState().owner?.rev).toBe(2);
+    cloud = cloudWith(12, 3);
+    await sigAt(55);
+    useSyncStore.setState({ owner: { userId: 7, rev: 2, sig: localSignature() } });
+    await pull();
+    expect(usePetStore.getState().exp).toBe(12);
+    expect(useSyncStore.getState().owner?.rev).toBe(3);
   });
 });

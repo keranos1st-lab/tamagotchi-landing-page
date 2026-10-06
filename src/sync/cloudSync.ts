@@ -101,6 +101,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let pollTimer: ReturnType<typeof setInterval> | undefined;
 let unsubs: Array<() => void> = [];
 let pushing: Promise<void> | null = null;
+let pushingKey = '';
 let lastErrStatus: number | null = null;
 let cycle: Promise<void> | null = null;
 let cycleGen = 0;
@@ -111,6 +112,8 @@ export const retryConfig = { delays: [0, 3000, 10000] };
 
 const st = () => useSyncStore.getState();
 const currentUserId = () => useAuthStore.getState().user?.id ?? null;
+const sessionKey = () => `${useAuthStore.getState().token ?? ''}|${currentUserId() ?? ''}`;
+const isCurrent = (key: string) => sessionKey() === key;
 const baseRev = () => {
   const o = st().owner;
   return o && o.userId === currentUserId() ? o.rev : 0;
@@ -122,6 +125,7 @@ function markSynced(rev: number, sig?: string) {
 }
 
 async function applyCloud(c: CloudState) {
+  const key = sessionKey();
   applying = true;
   try {
     const localChat = usePetStore.getState().chatHistory;
@@ -151,12 +155,13 @@ async function applyCloud(c: CloudState) {
     lastFull = signature(snap, true);
     applying = false;
   }
-  markSynced(c.rev, lastSig);
+  if (isCurrent(key)) markSynced(c.rev, lastSig);
 }
 
 export async function push(opts: { force?: boolean; keepalive?: boolean } = {}): Promise<void> {
   if (!useAuthStore.getState().token || st().conflict) return;
-  if (pushing && !opts.keepalive) return pushing;
+  const key = sessionKey();
+  if (pushing && pushingKey === key && !opts.keepalive) return pushing;
   const snap = readLocal();
   const body = {
     action: 'sync_save',
@@ -195,8 +200,9 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
     return;
   }
   st().set({ status: 'syncing' });
-  pushing = (async () => {
+  const run: Promise<void> = (async () => {
     const r = await authCall<{ rev: number }>(body);
+    if (!isCurrent(key)) return;
     if (r.ok) {
       lastSig = signature(snap, false);
       lastFull = signature(snap, true);
@@ -211,14 +217,22 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
       st().set({ status: 'error', error: r.message });
     }
   })().finally(() => {
-    pushing = null;
+    if (pushing === run) {
+      pushing = null;
+      pushingKey = '';
+    }
   });
-  return pushing;
+  pushing = run;
+  pushingKey = key;
+  return run;
 }
 
 export async function pull(): Promise<void> {
-  if (!useAuthStore.getState().token || st().conflict || pushing) return;
+  if (!useAuthStore.getState().token || st().conflict) return;
+  const key = sessionKey();
+  if (pushing && pushingKey === key) return;
   const r = await authCall<CloudState>(null, { query: '?sync=1' });
+  if (!isCurrent(key)) return;
   if (!r.ok) {
     if (r.status === 401) handleExpired();
     else {
@@ -236,7 +250,7 @@ export async function pull(): Promise<void> {
   const local = signature(readLocal(), false);
   const dirty = known ? local !== lastSig : local !== cloudSignature(r);
   if (dirty) st().set({ conflict: { server: r, reason: 'remote' } });
-  else await applyCloud(r);
+  else if (!st().conflict) await applyCloud(r);
 }
 
 const isDirty = () => signature(readLocal(), false) !== lastSig;
@@ -347,7 +361,9 @@ function handleExpired() {
 
 export async function connectAfterLogin(created: boolean): Promise<void> {
   st().set({ status: 'syncing', error: null, conflict: null });
+  const key = sessionKey();
   const r = await authCall<CloudState>(null, { query: '?sync=1' });
+  if (!isCurrent(key)) return;
   if (!r.ok) {
     st().set({ status: 'error', error: r.message });
     return;
@@ -388,7 +404,9 @@ export async function resolveConflict(choice: 'cloud' | 'local') {
 export async function resumeSession(): Promise<void> {
   const { token } = useAuthStore.getState();
   if (!token) return;
+  const sameToken = () => useAuthStore.getState().token === token;
   const me = await authCall<{ user: { id: number; email: string; createdAt: string } }>(null);
+  if (!sameToken()) return;
   if (!me.ok) {
     if (me.status === 401) handleExpired();
     else st().set({ status: 'error', error: me.message });
@@ -403,8 +421,9 @@ export async function resumeSession(): Promise<void> {
     await connectAfterLogin(false);
     return;
   }
+  const key = sessionKey();
   await pull();
-  if (!st().conflict && signature(readLocal(), false) !== lastSig) schedule();
+  if (isCurrent(key) && !st().conflict && signature(readLocal(), false) !== lastSig) schedule();
 }
 
 export async function logout(clearDevice: boolean): Promise<{ ok: boolean; message?: string }> {
