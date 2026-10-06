@@ -24,7 +24,7 @@ interface SyncState {
   status: SyncStatus;
   lastSyncedAt: number | null;
   error: string | null;
-  owner: { userId: number; rev: number } | null;
+  owner: { userId: number; rev: number; sig?: string } | null;
   conflict: { server: CloudState; reason: 'login' | 'remote' } | null;
   set: (p: Partial<SyncState>) => void;
 }
@@ -67,12 +67,28 @@ function readLocal(): Snapshot {
   return out;
 }
 
+function canonical(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canonical);
+  if (v && typeof v === 'object') {
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+        .map(([k, x]) => [k, canonical(x)]),
+    );
+  }
+  return v;
+}
+
 function signature(s: Snapshot, full: boolean): string {
   const pet = s.pet?.state
     ? Object.fromEntries(Object.entries(s.pet.state).filter(([k]) => full || !VOLATILE.has(k)))
     : null;
-  return JSON.stringify([pet, s.achievements?.state ?? null, s.memory?.state ?? null]);
+  return JSON.stringify(canonical([pet, s.achievements?.state ?? null, s.memory?.state ?? null]));
 }
+
+const cloudSignature = (c: CloudState) => signature({ pet: c.pet, achievements: c.achievements, memory: c.memory }, false);
+
+export const localSignature = () => signature(readLocal(), false);
 
 export const hasLocalPet = () => !!usePetStore.getState().hasSelectedPet;
 export const cloudHasPet = (c: CloudState) => !!(c.pet?.state as { hasSelectedPet?: boolean } | undefined)?.hasSelectedPet;
@@ -92,9 +108,9 @@ const baseRev = () => {
   return o && o.userId === currentUserId() ? o.rev : 0;
 };
 
-function markSynced(rev: number) {
+function markSynced(rev: number, sig?: string) {
   const uid = currentUserId();
-  if (uid) st().set({ owner: { userId: uid, rev }, status: 'idle', error: null, lastSyncedAt: Date.now() });
+  if (uid) st().set({ owner: { userId: uid, rev, sig }, status: 'idle', error: null, lastSyncedAt: Date.now() });
 }
 
 async function applyCloud(c: CloudState) {
@@ -119,7 +135,7 @@ async function applyCloud(c: CloudState) {
     lastFull = signature(snap, true);
     applying = false;
   }
-  markSynced(c.rev);
+  markSynced(c.rev, lastSig);
 }
 
 export async function push(opts: { force?: boolean; keepalive?: boolean } = {}): Promise<void> {
@@ -143,7 +159,7 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
       body: JSON.stringify(body),
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.rev && markSynced(d.rev))
+      .then((d) => d?.rev && markSynced(d.rev, signature(snap, false)))
       .catch(() => {});
     lastSig = signature(snap, false);
     lastFull = signature(snap, true);
@@ -155,7 +171,7 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
     if (r.ok) {
       lastSig = signature(snap, false);
       lastFull = signature(snap, true);
-      markSynced(r.rev);
+      markSynced(r.rev, lastSig);
     } else if (r.code === 'conflict') {
       const server = (r as unknown as { server: CloudState }).server;
       st().set({ status: 'idle', conflict: { server, reason: 'remote' } });
@@ -182,7 +198,9 @@ export async function pull(): Promise<void> {
     st().set({ status: 'idle', error: null });
     return;
   }
-  const dirty = signature(readLocal(), false) !== lastSig;
+  const known = st().owner?.userId === currentUserId() && st().owner?.sig !== undefined;
+  const local = signature(readLocal(), false);
+  const dirty = known ? local !== lastSig : local !== cloudSignature(r);
   if (dirty) st().set({ conflict: { server: r, reason: 'remote' } });
   else await applyCloud(r);
 }
@@ -282,7 +300,8 @@ export async function resumeSession(): Promise<void> {
     return;
   }
   useAuthStore.getState().setSession(token, me.user);
-  lastSig = signature(readLocal(), false);
+  const owner = st().owner;
+  lastSig = owner && owner.userId === me.user.id && owner.sig !== undefined ? owner.sig : '';
   lastFull = signature(readLocal(), true);
   start();
   if (st().owner?.userId !== me.user.id) {
