@@ -89,6 +89,7 @@ function signature(s: Snapshot, full: boolean): string {
 const cloudSignature = (c: CloudState) => signature({ pet: c.pet, achievements: c.achievements, memory: c.memory }, false);
 
 export const localSignature = () => signature(readLocal(), false);
+export const syncSignatures = () => ({ lastSig, lastFull });
 
 export const hasLocalPet = () => !!usePetStore.getState().hasSelectedPet;
 export const cloudHasPet = (c: CloudState) => !!(c.pet?.state as { hasSelectedPet?: boolean } | undefined)?.hasSelectedPet;
@@ -152,17 +153,30 @@ export async function push(opts: { force?: boolean; keepalive?: boolean } = {}):
     memory: snap.memory,
   };
   if (opts.keepalive && AUTH_URL) {
-    fetch(AUTH_URL, {
-      method: 'POST',
-      keepalive: true,
-      headers: { 'Content-Type': 'application/json', 'X-Auth-Token': useAuthStore.getState().token! },
-      body: JSON.stringify(body),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d?.rev && markSynced(d.rev, signature(snap, false)))
-      .catch(() => {});
-    lastSig = signature(snap, false);
-    lastFull = signature(snap, true);
+    const uid = currentUserId();
+    const token = useAuthStore.getState().token!;
+    const sentSig = signature(snap, false);
+    const sentFull = signature(snap, true);
+    try {
+      const r = await fetch(AUTH_URL, {
+        method: 'POST',
+        keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'X-Auth-Token': token },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) return;
+      const d = (await r.json().catch(() => null)) as { rev?: unknown } | null;
+      const rev = d?.rev;
+      if (typeof rev !== 'number' || !Number.isInteger(rev) || rev <= body.baseRev) return;
+      if (uid === null || currentUserId() !== uid || useAuthStore.getState().token !== token) return;
+      const owner = st().owner;
+      if (owner && owner.userId === uid && owner.rev > rev) return;
+      lastSig = sentSig;
+      lastFull = sentFull;
+      markSynced(rev, sentSig);
+    } catch {
+      return;
+    }
     return;
   }
   st().set({ status: 'syncing' });

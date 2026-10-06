@@ -13,15 +13,23 @@ g.document = { visibilityState: 'visible', addEventListener() {}, removeEventLis
 g.window = { addEventListener() {}, removeEventListener() {}, localStorage: g.localStorage, innerWidth: 1280, innerHeight: 800 };
 
 let cloud: unknown & { rev: number };
+let saveMode: 'ok' | 'network' | 'conflict' | 'badRev' | 'hold' = 'ok';
+let release: (() => void) | null = null;
 g.fetch = async (url: string, init?: { body?: string }) => {
   const body = init?.body ? JSON.parse(init.body) : null;
   const json = (d: unknown, status = 200) => ({ ok: status < 400, status, json: async () => d });
-  if (body?.action === 'sync_save') return json({ rev: cloud.rev + 1 });
+  if (body?.action === 'sync_save') {
+    if (saveMode === 'network') throw new TypeError('network');
+    if (saveMode === 'conflict') return json({ error: 'conflict', server: cloud }, 409);
+    if (saveMode === 'badRev') return json({});
+    if (saveMode === 'hold') await new Promise<void>((r) => (release = r));
+    return json({ rev: cloud.rev + 1 });
+  }
   if (String(url).includes('sync=1')) return json(cloud);
   return json({ user: { id: 7, email: 'a@b.c', createdAt: '' } });
 };
 
-const { useSyncStore, resumeSession, localSignature } = await import('./cloudSync');
+const { useSyncStore, resumeSession, localSignature, syncSignatures, push } = await import('./cloudSync');
 const { usePetStore } = await import('@/store/petStore');
 const { useAuthStore } = await import('@/store/authStore');
 
@@ -41,6 +49,8 @@ beforeEach(() => {
   mem.clear();
   useAuthStore.setState({ token: 't', user: { id: 7, email: 'a@b.c', createdAt: '' } });
   useSyncStore.setState({ status: 'off', error: null, conflict: null, owner: null });
+  saveMode = 'ok';
+  release = null;
 });
 
 describe('resumeSession', () => {
@@ -81,5 +91,59 @@ describe('resumeSession', () => {
     await resumeSession();
     expect(useSyncStore.getState().conflict).toBeNull();
     expect(useSyncStore.getState().owner?.rev).toBe(2);
+  });
+});
+
+describe('push({ keepalive: true })', () => {
+  const prepare = async () => {
+    const sig = await sigAt(40);
+    await resumeSessionWith(sig);
+    await setLocal(55);
+    return sig;
+  };
+  const resumeSessionWith = async (sig: string) => {
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig } });
+    cloud = cloudWith(40, 1);
+    await resumeSession();
+  };
+
+  for (const mode of ['network', 'conflict', 'badRev'] as const) {
+    test(`${mode}: подтверждённое состояние не меняется`, async () => {
+      const sig = await prepare();
+      const before = syncSignatures();
+      saveMode = mode;
+      await push({ keepalive: true });
+      const owner = useSyncStore.getState().owner;
+      expect(owner?.rev).toBe(1);
+      expect(owner?.sig).toBe(sig);
+      expect(syncSignatures()).toEqual(before);
+      expect(localSignature()).not.toBe(syncSignatures().lastSig);
+    });
+  }
+
+  test('успех: подписи и ревизия отправленного снимка', async () => {
+    await prepare();
+    const sent = localSignature();
+    await push({ keepalive: true });
+    const owner = useSyncStore.getState().owner;
+    expect(owner?.rev).toBe(2);
+    expect(owner?.sig).toBe(sent);
+    expect(syncSignatures().lastSig).toBe(sent);
+    expect(localSignature()).toBe(syncSignatures().lastSig);
+  });
+
+  test('изменение во время запроса остаётся несинхронизированным', async () => {
+    await prepare();
+    const sent = localSignature();
+    saveMode = 'hold';
+    const p = push({ keepalive: true });
+    await setLocal(60);
+    release?.();
+    await p;
+    const owner = useSyncStore.getState().owner;
+    expect(owner?.rev).toBe(2);
+    expect(owner?.sig).toBe(sent);
+    expect(syncSignatures().lastSig).toBe(sent);
+    expect(localSignature()).not.toBe(syncSignatures().lastSig);
   });
 });
