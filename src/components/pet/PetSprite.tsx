@@ -57,7 +57,7 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
     case 'jump':
       return { motion: 'pm-jump', shadow: 'pm-sh-jump' };
     case 'play':
-      return { motion: 'pm-play', shadow: 'pm-sh-play' };
+      return type === 'cat' ? { motion: '', shadow: '' } : { motion: 'pm-play', shadow: 'pm-sh-play' };
     case 'eat':
       return { motion: 'pm-eat', shadow: '' };
     case 'sleep':

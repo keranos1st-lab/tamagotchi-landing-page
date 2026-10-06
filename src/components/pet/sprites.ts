@@ -53,7 +53,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   review: { ...KODIK_MAIN, row: 8, frames: 6, fps: 7 },
   eat: { ...KODIK_CARE, row: 0, frames: 4, fps: 5 },
   sleep: { ...KODIK_CARE, row: 1, frames: 4, fps: 3 },
-  play: { ...KODIK_CARE, row: 2, frames: 4, fps: 6 },
+  play: { src: u('/pets/cat-play.webp'), cols: 12, rows: 1, row: 0, frames: 12, fps: 7, cw: 322, ch: 313 },
   study: { ...KODIK_CARE, row: 3, frames: 4, fps: 4 },
   pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
