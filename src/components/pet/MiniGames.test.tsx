@@ -46,7 +46,10 @@ const openChase = () => {
 };
 
 const finishChase = async (view: ReturnType<typeof openChase>) => {
+  const field = view.container.querySelector('.pa-field') as HTMLElement;
+  field.getBoundingClientRect = () => ({ left: 0, top: 0, width: 400, height: 320, right: 400, bottom: 320, x: 0, y: 0, toJSON() {} }) as DOMRect;
   rtl.fireEvent.click(view.getByText('Старт'));
+  rtl.fireEvent.mouseMove(field, { clientX: 380, clientY: 300 });
   await advance(31000);
 };
 
@@ -134,6 +137,7 @@ describe('мини-игры: энергия при запуске и после 
     const view = openChase();
     rtl.fireEvent.click(view.getByText('Старт'));
     await advance(2000);
+    expect(view.getByText(/Пауза/)).toBeTruthy();
     await rtl.act(async () => {
       usePetStore.setState({ energy: 3 });
     });

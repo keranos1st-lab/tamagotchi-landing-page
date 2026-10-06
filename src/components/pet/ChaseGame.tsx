@@ -12,6 +12,8 @@ const DURATION = 30;
 const PET = 70;
 const CATCH_DIST = 34;
 const BASE_SPEED = 110;
+const TICK_MS = 100;
+const TOUCH_GHOST_MS = 800;
 
 type Phase = 'intro' | 'play' | 'done';
 
@@ -27,7 +29,7 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const [pos, setPos] = useState({ x: 20, y: 20 });
   const [anim, setAnim] = useState<PetAnim>('idle');
   const [flash, setFlash] = useState<{ x: number; y: number; id: number } | null>(null);
-  const [inside, setInside] = useState(false);
+  const [active, setActive] = useState(false);
 
   const field = useRef<HTMLDivElement>(null);
   const mouse = useRef<{ x: number; y: number } | null>(null);
@@ -35,20 +37,34 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const stunned = useRef(0);
   const catchesRef = useRef(0);
   const rewarded = useRef(false);
+  const activeMs = useRef(0);
+  const lastTouch = useRef(0);
+
+  const setPointer = (p: { x: number; y: number } | null) => {
+    mouse.current = p;
+    setActive(p !== null);
+  };
 
 
   useEffect(() => {
     if (phase !== 'play') return;
     const id = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          setPhase('done');
-          return 0;
-        }
-        return t - 1;
-      });
-    }, 1000);
+      if (!mouse.current || document.hidden) return;
+      activeMs.current += TICK_MS;
+      const left = Math.max(0, Math.ceil((DURATION * 1000 - activeMs.current) / 1000));
+      setTimeLeft(left);
+      if (left === 0) setPhase('done');
+    }, TICK_MS);
     return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== 'play') return;
+    const onVisibility = () => {
+      if (document.hidden) setPointer(null);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [phase]);
 
   useEffect(() => {
@@ -117,13 +133,30 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
   const updateMouse = (clientX: number, clientY: number) => {
     const r = field.current?.getBoundingClientRect();
     if (!r) return;
-    mouse.current = { x: clientX - r.left, y: clientY - r.top };
+    const x = clientX - r.left;
+    const y = clientY - r.top;
+    if (x < 0 || y < 0 || x > r.width || y > r.height) return setPointer(null);
+    setPointer({ x, y });
+  };
+
+  const onMouse = (clientX: number, clientY: number) => {
+    if (Date.now() - lastTouch.current < TOUCH_GHOST_MS) return;
+    updateMouse(clientX, clientY);
+  };
+
+  const onTouch = (touches: { length: number; [i: number]: { clientX: number; clientY: number } }) => {
+    lastTouch.current = Date.now();
+    if (touches.length === 0) return setPointer(null);
+    updateMouse(touches[0].clientX, touches[0].clientY);
   };
 
   const start = () => {
     if (!canStartGame(usePetStore.getState().energy)) return;
     catchesRef.current = 0;
     rewarded.current = false;
+    activeMs.current = 0;
+    lastTouch.current = 0;
+    setPointer(null);
     setGained(null);
     setCatches(0);
     setTimeLeft(DURATION);
@@ -169,14 +202,15 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
 
       <div
         ref={field}
-        onMouseMove={(e) => updateMouse(e.clientX, e.clientY)}
-        onMouseEnter={() => setInside(true)}
+        onMouseMove={(e) => onMouse(e.clientX, e.clientY)}
+        onMouseEnter={(e) => onMouse(e.clientX, e.clientY)}
         onMouseLeave={() => {
-          mouse.current = null;
-          setInside(false);
+          if (Date.now() - lastTouch.current >= TOUCH_GHOST_MS) setPointer(null);
         }}
-        onTouchMove={(e) => updateMouse(e.touches[0].clientX, e.touches[0].clientY)}
-        onTouchEnd={() => (mouse.current = null)}
+        onTouchStart={(e) => onTouch(e.touches)}
+        onTouchMove={(e) => onTouch(e.touches)}
+        onTouchEnd={(e) => onTouch(e.touches)}
+        onTouchCancel={(e) => onTouch(e.touches)}
         className={`pa-field pa-field-grid relative h-80 touch-none select-none ${
           phase === 'play' ? 'cursor-crosshair' : ''
         }`}
@@ -211,9 +245,9 @@ export function ChaseGame({ onComplete }: { onComplete: () => void }) {
           </div>
         )}
 
-        {phase === 'play' && !inside && (
+        {phase === 'play' && !active && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-xs text-purple-300">
-            Наведи курсор на поле
+            Пауза: веди курсор по полю или касайся его, чтобы продолжить
           </div>
         )}
       </div>
