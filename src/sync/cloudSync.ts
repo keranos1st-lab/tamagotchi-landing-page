@@ -140,6 +140,10 @@ async function applyCloud(c: CloudState) {
       useMemoryStore.setState({ items: [], consent: null, pending: null });
       localStorage.removeItem(KEYS.memory);
     }
+    if (!c.achievements) {
+      useAchievementStore.setState({ counters: {}, gamesPlayed: [], petsOwned: [], days: [], unlocked: {}, queue: [] });
+      localStorage.removeItem(KEYS.achievements);
+    }
     usePetStore.getState().advance();
   } finally {
     const snap = readLocal();

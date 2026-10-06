@@ -52,6 +52,7 @@ g.fetch = async (url: string, init?: { body?: string }) => {
 const { useSyncStore, resumeSession, localSignature, syncSignatures, push, retryConfig, cancelRetry } = await import('./cloudSync');
 const { usePetStore } = await import('@/store/petStore');
 const { useMemoryStore } = await import('@/store/memoryStore');
+const { useAchievementStore } = await import('@/store/achievementStore');
 const { resolveConflict } = await import('./cloudSync');
 const { useAuthStore } = await import('@/store/authStore');
 
@@ -370,5 +371,102 @@ describe('пустая облачная память', () => {
     expect(useMemoryStore.getState().items.map((i) => i.text)).toEqual(['новый факт']);
     expect(useMemoryStore.getState().consent).toBe(true);
     expect(JSON.parse(localStorage.getItem('petagent-memory')!).state.items[0].text).toBe('новый факт');
+  });
+});
+
+describe('пустые облачные достижения', () => {
+  const settle = (ms = 150) => new Promise((r) => setTimeout(r, ms));
+  const achSave = (id: string) => ({
+    state: { counters: { feed: 5 }, gamesPlayed: ['quiz'], petsOwned: ['cat'], days: ['2026-10-01'], unlocked: { [id]: 123 } },
+    version: 1,
+  });
+  const setLocalAch = async (id: string) => {
+    localStorage.setItem('petagent-achievements', JSON.stringify(achSave(id)));
+    await useAchievementStore.persist.rehydrate();
+    useAchievementStore.setState({ queue: ['queued'] });
+  };
+  const isEmptyAch = () => {
+    const a = useAchievementStore.getState();
+    return (
+      Object.keys(a.counters).length === 0 &&
+      a.gamesPlayed.length === 0 &&
+      a.petsOwned.length === 0 &&
+      a.days.length === 0 &&
+      Object.keys(a.unlocked).length === 0 &&
+      a.queue.length === 0
+    );
+  };
+  const rawEmpty = () => {
+    const raw = localStorage.getItem('petagent-achievements');
+    return raw === null || Object.keys(JSON.parse(raw).state.unlocked ?? {}).length === 0;
+  };
+
+  test('пустое облако очищает активные достижения и localStorage', async () => {
+    await setLocalAch('first');
+    expect(Object.keys(useAchievementStore.getState().unlocked).length).toBe(1);
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), achievements: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    expect(isEmptyAch()).toBe(true);
+    expect(rawEmpty()).toBe(true);
+    expect(useSyncStore.getState().conflict).toBeNull();
+  });
+
+  test('повторная гидратация не возвращает старые достижения', async () => {
+    await setLocalAch('first');
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), achievements: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    await useAchievementStore.persist.rehydrate();
+    expect(isEmptyAch()).toBe(true);
+    await settle();
+    expect(rawEmpty()).toBe(true);
+  });
+
+  test('конфликт: достижения сохраняются до выбора, выбор облака очищает их', async () => {
+    await setLocalAch('first');
+    const base = localSignature();
+    await setLocal(55);
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: base } });
+    cloud = { ...cloudWith(10, 2), achievements: null };
+    await resumeSession();
+    expect(useSyncStore.getState().conflict).not.toBeNull();
+    expect(Object.keys(useAchievementStore.getState().unlocked)).toEqual(['first']);
+    expect(localStorage.getItem('petagent-achievements')).not.toBeNull();
+    await resolveConflict('cloud');
+    expect(isEmptyAch()).toBe(true);
+    expect(rawEmpty()).toBe(true);
+    expect(usePetStore.getState().exp).toBe(10);
+  });
+
+  test('непустые облачные достижения загружаются правильно', async () => {
+    await setLocalAch('old');
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), achievements: achSave('new') };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    await resumeSession();
+    const a = useAchievementStore.getState();
+    expect(Object.keys(a.unlocked)).toEqual(['new']);
+    expect(a.counters.feed).toBe(5);
+    expect(a.gamesPlayed).toEqual(['quiz']);
+    expect(a.petsOwned).toEqual(['cat']);
+    expect(a.days).toEqual(['2026-10-01']);
+    expect(Object.keys(JSON.parse(localStorage.getItem('petagent-achievements')!).state.unlocked)).toEqual(['new']);
+  });
+
+  test('очистка не начисляет опыт и не запускает отправку', async () => {
+    await setLocalAch('first');
+    await sigAt(40);
+    cloud = { ...cloudWith(40, 2), achievements: null };
+    useSyncStore.setState({ owner: { userId: 7, rev: 1, sig: localSignature() } });
+    saves = 0;
+    await resumeSession();
+    await settle(4300);
+    expect(saves).toBe(0);
+    expect(usePetStore.getState().exp).toBe(40);
+    expect(usePetStore.getState().level).toBe(2);
+    expect(useSyncStore.getState().owner?.rev).toBe(2);
   });
 });
