@@ -249,46 +249,76 @@ function CatchGame({ onComplete }: { onComplete: () => void }) {
 function MemoryGame({ onComplete }: { onComplete: () => void }) {
   const emojis = Object.keys(PET_ICONS) as PetType[];
   const [cards, setCards] = useState<Array<{ id: number; emoji: string; flipped: boolean; matched: boolean }>>([]);
-  const [flippedCards, setFlippedCards] = useState<number[]>([]);
   const [moves, setMoves] = useState(0);
   const [gameWon, setGameWon] = useState(false);
   const playedGame = usePetStore((s) => s.playedGame);
   const [gained, setGained] = useState<number | null>(null);
   const movesRef = useRef(0);
+  type Card = { id: number; emoji: string; flipped: boolean; matched: boolean };
+  const cardsRef = useRef<Card[]>([]);
+  const flippedRef = useRef<number[]>([]);
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const lockedRef = useRef(false);
+  const finishedRef = useRef(false);
+  const aliveRef = useRef(true);
+
+  const later = (fn: () => void, ms: number) => {
+    const t = setTimeout(() => {
+      timersRef.current.delete(t);
+      if (!aliveRef.current) return;
+      fn();
+    }, ms);
+    timersRef.current.add(t);
+  };
 
   useEffect(() => {
+    aliveRef.current = true;
     const shuffled = [...emojis, ...emojis]
       .sort(() => Math.random() - 0.5)
       .map((emoji, i) => ({ id: i, emoji, flipped: false, matched: false }));
+    cardsRef.current = shuffled;
+    flippedRef.current = [];
+    lockedRef.current = false;
+    finishedRef.current = false;
     setCards(shuffled);
+    const timers = timersRef.current;
+    return () => {
+      aliveRef.current = false;
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
   }, []);
 
   const handleCardClick = (id: number) => {
-    if (flippedCards.length === 2) return;
-    if (cards[id].flipped || cards[id].matched) return;
+    if (!aliveRef.current || lockedRef.current || finishedRef.current) return;
+    const current = cardsRef.current;
+    if (!current[id] || current[id].flipped || current[id].matched) return;
 
-    const newCards = [...cards];
-    newCards[id].flipped = true;
+    const newCards = current.map((c) => (c.id === id ? { ...c, flipped: true } : c));
+    cardsRef.current = newCards;
     setCards(newCards);
 
-    const newFlipped = [...flippedCards, id];
-    setFlippedCards(newFlipped);
+    const newFlipped = [...flippedRef.current, id];
+    flippedRef.current = newFlipped;
 
     if (newFlipped.length === 2) {
+      lockedRef.current = true;
       movesRef.current += 1;
       setMoves(movesRef.current);
       const [first, second] = newFlipped;
-      
-      if (cards[first].emoji === cards[second].emoji) {
-        setTimeout(() => {
-          const matched = [...cards];
-          matched[first].matched = true;
-          matched[second].matched = true;
+
+      if (newCards[first].emoji === newCards[second].emoji) {
+        later(() => {
+          const matched = cardsRef.current.map((c) => (c.id === first || c.id === second ? { ...c, matched: true } : c));
+          cardsRef.current = matched;
           sfx.good();
           setCards(matched);
-          setFlippedCards([]);
-          
-          if (matched.every(c => c.matched)) {
+          flippedRef.current = [];
+          lockedRef.current = false;
+
+          if (matched.every((c) => c.matched)) {
+            if (finishedRef.current) return;
+            finishedRef.current = true;
             setGameWon(true);
             sfx.win();
             setGained(playedGame('memory', Math.max(10, 50 - Math.max(0, movesRef.current - 8) * 2)));
@@ -297,12 +327,12 @@ function MemoryGame({ onComplete }: { onComplete: () => void }) {
           }
         }, 500);
       } else {
-        setTimeout(() => {
-          const reset = [...cards];
-          reset[first].flipped = false;
-          reset[second].flipped = false;
+        later(() => {
+          const reset = cardsRef.current.map((c) => (c.id === first || c.id === second ? { ...c, flipped: false } : c));
+          cardsRef.current = reset;
           setCards(reset);
-          setFlippedCards([]);
+          flippedRef.current = [];
+          lockedRef.current = false;
         }, 1000);
       }
     }
