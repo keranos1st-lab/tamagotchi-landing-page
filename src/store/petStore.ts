@@ -105,7 +105,7 @@ export interface PetState {
 
 const PET_NAMES: Record<PetType, string> = {
   cat: 'Кодик',
-  dog: 'Собачка',
+  dog: 'Альпака',
   bird: 'Птичка',
   fox: 'Лисичка',
   dragon: 'Дракончик',

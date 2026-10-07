@@ -18,7 +18,7 @@ export const THINK_POSES: Record<PetType, ThinkPose> = {
   dragon: { anim: 'idle', label: 'пускает дымок и думает…', fx: 'smoke', tone: 'violet' },
   fox: { anim: 'trick', label: 'виляет хвостом и думает…', fx: 'dots', tone: 'orange' },
   bunny: { anim: 'trick', label: 'шевелит ушками и думает…', fx: 'dots', tone: 'pink' },
-  dog: { anim: 'trick', label: 'чешет за ухом и думает…', fx: 'dots', tone: 'amber' },
+  dog: { anim: 'trick', label: 'встряхивает шёрстку и думает…', fx: 'dots', tone: 'amber' },
 };
 
 export const thinkingAnim = (type: PetType): PetAnim => THINK_POSES[type].anim;

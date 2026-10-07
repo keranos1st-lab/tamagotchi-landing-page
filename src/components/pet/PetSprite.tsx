@@ -31,12 +31,11 @@ const IDLE_SHADOW: Partial<Record<PetType, string>> = {
   bird: 'pm-sh-bird',
   dragon: 'pm-sh-dragon',
   bunny: 'pm-sh-bunny',
-  dog: 'pm-sh-dog',
 };
 
 const FIDGETS: Record<PetType, string[]> = {
   cat: ['pm-f-tilt', 'pm-f-stretch', 'pm-f-look', 'pm-f-hop'],
-  dog: ['pm-f-hop', 'pm-f-shake', 'pm-f-tilt', 'pm-f-hop'],
+  dog: ['pm-f-tilt', 'pm-f-look', 'pm-f-stretch', 'pm-f-shake'],
   bird: ['pm-f-flip', 'pm-f-look', 'pm-f-hop', 'pm-f-tilt'],
   owl: ['pm-f-owl', 'pm-f-look', 'pm-f-owl', 'pm-f-stretch'],
   dragon: ['pm-f-stretch', 'pm-f-shake', 'pm-f-flip', 'pm-f-hop'],
@@ -57,7 +56,7 @@ function motionFor(type: PetType, anim: PetAnim): { motion: string; shadow: stri
     case 'jump':
       return { motion: 'pm-jump', shadow: 'pm-sh-jump' };
     case 'play':
-      return type === 'cat' ? { motion: '', shadow: '' } : { motion: 'pm-play', shadow: 'pm-sh-play' };
+      return type === 'cat' || type === 'dog' ? { motion: '', shadow: '' } : { motion: 'pm-play', shadow: 'pm-sh-play' };
     case 'eat':
       return { motion: 'pm-eat', shadow: '' };
     case 'sleep':

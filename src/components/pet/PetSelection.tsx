@@ -6,7 +6,7 @@ import Icon from '@/components/ui/icon';
 
 const PET_INFO: Record<PetType, { emoji: string; color: string; desc: string }> = {
   cat: { emoji: '🐱', color: 'from-orange-500 to-amber-500', desc: 'Кодик — робо-кот. Независимый и умный!' },
-  dog: { emoji: '🐕', color: 'from-amber-700 to-yellow-600', desc: 'Верный друг. Всегда поддержит!' },
+  dog: { emoji: '🦙', color: 'from-teal-600 to-cyan-500', desc: 'Мягкая и пушистая. Всегда поддержит!' },
   bird: { emoji: '🐦', color: 'from-blue-500 to-cyan-400', desc: 'Свободный дух. Знает много интересного!' },
   fox: { emoji: '🦊', color: 'from-orange-600 to-red-500', desc: 'Хитрый и мудрый. Даст лучший совет!' },
   dragon: { emoji: '🐉', color: 'from-purple-600 to-violet-500', desc: 'Могучий и мудрый. Эксперт во всём!' },

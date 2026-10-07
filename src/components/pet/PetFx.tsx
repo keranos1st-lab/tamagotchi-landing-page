@@ -117,9 +117,6 @@ export function PetFx({ anim, size, type }: { anim: PetAnim; size: number; type:
       {anim === 'special' && type === 'dragon' && (
         <span className="fx-flame" style={{ left: '78%', top: '26%', width: size * 0.5, height: size * 0.22 }} />
       )}
-      {anim === 'special' && type === 'dog' && (
-        <span className="fx-ball" style={{ width: size * 0.13, height: size * 0.13, left: '50%', bottom: '6%' }} />
-      )}
       {anim === 'wave' && (
         <span className="fx-wavelines" style={{ fontSize: base * 1.1, right: '4%', top: '18%' }}>
           ʚ

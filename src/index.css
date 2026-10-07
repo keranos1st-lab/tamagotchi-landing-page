@@ -818,7 +818,7 @@
 .pm-idle-panda  { animation: pmBreatheHeavy 4.2s ease-in-out infinite; }
 .pm-idle-fox    { animation: pmSway 3.6s ease-in-out infinite; }
 .pm-idle-owl    { animation: pmOwl 4.4s ease-in-out infinite; }
-.pm-idle-dog    { animation: pmBounce .9s ease-in-out infinite; }
+.pm-idle-dog    { animation: pmBreathe 3.4s ease-in-out infinite; }
 .pm-idle-bunny  { animation: pmBunny 2.4s cubic-bezier(.3,0,.3,1) infinite; }
 .pm-idle-bird   { animation: pmHover 1.6s ease-in-out infinite; }
 .pm-idle-dragon { animation: pmDragon 3.4s ease-in-out infinite; }
@@ -838,7 +838,6 @@
 @keyframes pmHover { 0%,100% { transform: translateY(-4%) rotate(-2deg); } 50% { transform: translateY(-9%) rotate(2deg); } }
 @keyframes pmDragon { 0%,100% { transform: translateY(-3%) scale(1); } 50% { transform: translateY(-7%) scale(1.02,.99); } }
 
-.pm-sh-dog    { animation: pmShBounce .9s ease-in-out infinite; }
 .pm-sh-bunny  { animation: pmShBunny 2.4s cubic-bezier(.3,0,.3,1) infinite; }
 .pm-sh-bird   { animation: pmShHover 1.6s ease-in-out infinite; }
 .pm-sh-dragon { animation: pmShHover 3.4s ease-in-out infinite; }

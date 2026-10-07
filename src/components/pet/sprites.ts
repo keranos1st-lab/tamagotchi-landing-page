@@ -92,9 +92,33 @@ function buildSheet(file: string, trickFps = 14): Record<PetAnim, SheetFrame> {
   };
 }
 
+const ALPACA_BASE = { src: u('/pets/alpaca-sheet.webp'), cols: 4, rows: 10, cw: 216, ch: 216 };
+const alp = (row: number, fps: number): SheetFrame => ({ ...ALPACA_BASE, row, frames: 4, fps });
+
+const ALPACA: Record<PetAnim, SheetFrame> = {
+  idle: alp(0, 4),
+  'run-right': alp(1, 8),
+  'run-left': alp(9, 8),
+  wave: alp(6, 9),
+  jump: alp(4, 6),
+  failed: alp(7, 3),
+  waiting: alp(3, 3),
+  working: alp(5, 4),
+  review: alp(6, 9),
+  eat: alp(2, 5),
+  sleep: alp(3, 3),
+  play: alp(4, 6),
+  study: alp(5, 4),
+  pet: alp(6, 5),
+  beg: alp(0, 4),
+  special: alp(8, 7),
+  flap: alp(6, 9),
+  trick: alp(8, 6),
+};
+
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   cat: KODIK,
-  dog: buildSheet('dog-sheet.webp'),
+  dog: ALPACA,
   bird: buildSheet('bird-sheet.webp'),
   fox: buildSheet('fox-sheet.webp'),
   dragon: {
@@ -108,7 +132,7 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
 
 export const PET_ICONS: Record<PetType, string> = {
   cat: u('/pets/kodik-icon.png'),
-  dog: u('/pets/dog.webp'),
+  dog: u('/pets/alpaca.webp'),
   bird: u('/pets/bird.webp'),
   fox: u('/pets/fox.webp'),
   dragon: u('/pets/dragon.webp'),

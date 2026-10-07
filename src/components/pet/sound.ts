@@ -243,10 +243,9 @@ export function signatureSfx(type: string) {
   if (!c || !throttle('sig', 800)) return;
   switch (type) {
     case 'dog':
-      tone(c, { freq: 500, to: 800, dur: 0.1, type: 'square', vol: 0.08 });
-      tone(c, { freq: 700, to: 1000, start: 0.12, dur: 0.1, type: 'square', vol: 0.08 });
-      [0.3, 0.55, 0.75].forEach((st) => tone(c, { freq: 180, to: 90, start: st, dur: 0.08, type: 'sine', vol: 0.25 }));
-      tone(c, { freq: 700, to: 1200, start: 1.9, dur: 0.18, type: 'triangle', vol: 0.18 });
+      tone(c, { freq: 260, to: 330, dur: 0.35, type: 'triangle', vol: 0.12 });
+      [0.45, 0.7, 0.95, 1.2].forEach((st) => noise(c, { start: st, dur: 0.14, vol: 0.2, freq: 800, q: 0.8, type: 'lowpass' }));
+      [1.7, 1.9, 2.1].forEach((st, k) => tone(c, { freq: 1100 + k * 300, to: 1500 + k * 300, start: st, dur: 0.16, type: 'sine', vol: 0.12 }));
       break;
     case 'fox':
       [0, 0.24].forEach((st) => noise(c, { start: st, dur: 0.14, vol: 0.28, freq: 1400, q: 1.5 }));

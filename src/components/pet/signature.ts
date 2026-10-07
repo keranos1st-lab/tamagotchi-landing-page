@@ -10,7 +10,7 @@ export interface Signature {
 
 export const SIGNATURES: Record<PetType, Signature> = {
   cat: { label: 'Кодить', icon: 'Code', bubble: ['Пишу код!', 'Деплою!', 'Баг найден!'], duration: 2600, hint: 'Кодик садится писать код' },
-  dog: { label: 'Апорт!', icon: 'CircleDot', bubble: ['Апорт!', 'Я принёс мячик!', 'Ещё кинешь?'], duration: 2600, hint: 'Собачка приносит мячик' },
+  dog: { label: 'Встряхнись!', icon: 'Sparkles', bubble: ['Мм-мм, пушистая!', 'Встряхнулась!', 'Сияю!'], duration: 2600, hint: 'Альпака встряхивает шёрстку и сияет' },
   fox: { label: 'Фыр-фыр', icon: 'Wind', bubble: ['Фыр-фыр!', 'Где мой хвост?!', 'Поймаю!'], duration: 2400, hint: 'Лисёнок фыркает, бегает кругами за хвостом и у него кружится голова' },
   dragon: { label: 'Огонь!', icon: 'Flame', bubble: ['Р-р-р!', 'Огонёк!', 'Пш-ш-ш!'], duration: 2400, hint: 'Дракончик набирает воздух и выпускает струю огня' },
   bunny: { label: 'Прыг-скок', icon: 'Rabbit', bubble: ['Прыг-скок!', 'Вжух!', 'Выше всех!'], duration: 2200, hint: 'Зайчик делает три высоких прыжка подряд' },

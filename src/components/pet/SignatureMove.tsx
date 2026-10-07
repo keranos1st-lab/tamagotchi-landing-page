@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PetType } from '@/store/petStore';
 import { PetSprite } from './PetSprite';
-import type { PetAnim } from './sprites';
+import { PET_SHEETS, CELL_H, CELL_W, type PetAnim } from './sprites';
 import { SIGNATURES } from './signature';
 
 type Step = { anim: PetAnim; ms: number; cls?: string; fx?: string };
@@ -14,10 +14,9 @@ const SCRIPTS: Record<PetType, Step[]> = {
     { anim: 'wave', ms: 500 },
   ],
   dog: [
-    { anim: 'trick', ms: 700, cls: 'sm-crouch', fx: 'throw' },
-    { anim: 'run-right', ms: 650, cls: 'sm-dash-out-r' },
-    { anim: 'run-left', ms: 750, cls: 'sm-dash-back-l', fx: 'carry' },
-    { anim: 'trick', ms: 1000, cls: 'sm-proud', fx: 'drop' },
+    { anim: 'idle', ms: 400, cls: 'sm-crouch' },
+    { anim: 'trick', ms: 1500, cls: 'sm-wag' },
+    { anim: 'trick', ms: 700, cls: 'sm-proud' },
   ],
   fox: [
     { anim: 'idle', ms: 500, cls: 'sm-sniff', fx: 'puff' },
@@ -91,7 +90,8 @@ export function SignatureMove({ type, size, onDone }: { type: PetType; size: num
   }, [type, script]);
 
   const step = script[Math.min(i, script.length - 1)];
-  const w = size * (192 / 208);
+  const idle = PET_SHEETS[type].idle;
+  const w = (idle.cw ?? CELL_W) * (size / (idle.ch ?? CELL_H));
   const mouth = MOUTH[type];
 
   return (
