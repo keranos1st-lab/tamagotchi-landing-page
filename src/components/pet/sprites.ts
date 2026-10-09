@@ -20,7 +20,6 @@ export type PetAnim =
   | 'pet'
   | 'beg'
   | 'special'
-  | 'flap'
   | 'trick';
 
 export const CELL_W = 192;
@@ -59,7 +58,6 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   pet: { ...KODIK_MAIN, row: 0, frames: 1, fps: 1 },
   beg: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   special: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
-  flap: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
   trick: { src: u('/pets/cat-laptop.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 10, cw: 384, ch: 416 },
 };
 
@@ -88,7 +86,6 @@ function buildSheet(file: string, trickFps = 14): Record<PetAnim, SheetFrame> {
     pet: { ...idle, frames: 1, fps: 1 },
     beg: idle,
     special: { ...play, fps: 8 },
-    flap: wave,
     trick: { src: u(`/pets/${file.replace('-sheet', '-trick')}`), cols: 8, rows: 1, row: 0, frames: 8, fps: trickFps },
   };
 }
@@ -113,7 +110,6 @@ const ALPACA: Record<PetAnim, SheetFrame> = {
   pet: alp(6, 5),
   beg: alp(0, 4),
   special: alp(8, 7),
-  flap: alp(6, 9),
   trick: alp(8, 6),
 };
 
@@ -145,7 +141,6 @@ const FOX: Record<PetAnim, SheetFrame> = {
   pet: FOX_PET,
   beg: FOX_IDLE,
   special: FOX_TRICK,
-  flap: FOX_IDLE,
   trick: FOX_TRICK,
 };
 
@@ -159,7 +154,6 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   fox: FOX,
   dragon: {
     ...buildSheet('dragon-sheet.webp'),
-    flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
     eat: { src: u('/pets/dragon-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 },
     trick: { src: u('/pets/dragon-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3.5, cw: 256, ch: 208 },
     play: DRAGON_PLAY,
