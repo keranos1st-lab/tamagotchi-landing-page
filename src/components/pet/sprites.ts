@@ -149,6 +149,7 @@ const FOX: Record<PetAnim, SheetFrame> = {
   trick: FOX_TRICK,
 };
 
+const DRAGON_PLAY: SheetFrame = { src: u('/pets/dragon-play.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 7 };
 const DRAGON_WALK = { src: u('/pets/dragon-walk.webp'), cols: 8, rows: 2 };
 
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
@@ -160,6 +161,9 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
     ...buildSheet('dragon-sheet.webp'),
     flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
     eat: { src: u('/pets/dragon-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 },
+    play: DRAGON_PLAY,
+    jump: DRAGON_PLAY,
+    special: { ...DRAGON_PLAY, fps: 9 },
     'run-right': { ...DRAGON_WALK, row: 0, frames: 8, fps: 10 },
     'run-left': { ...DRAGON_WALK, row: 1, frames: 8, fps: 10 },
   },
