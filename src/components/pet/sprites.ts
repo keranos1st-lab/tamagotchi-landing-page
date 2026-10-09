@@ -123,11 +123,12 @@ const FOX_PLAY: SheetFrame = { src: u('/pets/fox-play.webp'), cols: 8, rows: 1, 
 const FOX_SAD: SheetFrame = { src: u('/pets/fox-sad.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180, loopFrom: 5 };
 const FOX_PET: SheetFrame = { src: u('/pets/fox-pet.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 8, cw: 232, ch: 180 };
 const FOX_TRICK: SheetFrame = { src: u('/pets/fox-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 7, cw: 232, ch: 180 };
+const FOX_IDLE: SheetFrame = { src: u('/pets/fox-idle.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 4, cw: 232, ch: 180 };
 const FOX_WALK = { src: u('/pets/fox-walk.webp'), cols: 8, rows: 2, cw: 232, ch: 180 };
 const fx = (row: number, fps: number): SheetFrame => ({ ...FOX_BASE, row, frames: 4, fps });
 
 const FOX: Record<PetAnim, SheetFrame> = {
-  idle: fx(0, 4),
+  idle: FOX_IDLE,
   'run-right': { ...FOX_WALK, row: 0, frames: 8, fps: 12 },
   'run-left': { ...FOX_WALK, row: 1, frames: 8, fps: 12 },
   wave: fx(6, 9),
@@ -141,7 +142,7 @@ const FOX: Record<PetAnim, SheetFrame> = {
   play: FOX_PLAY,
   study: { src: u('/pets/fox-study.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180 },
   pet: FOX_PET,
-  beg: fx(0, 4),
+  beg: FOX_IDLE,
   special: FOX_TRICK,
   flap: fx(6, 9),
   trick: FOX_TRICK,
