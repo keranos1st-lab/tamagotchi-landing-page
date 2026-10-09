@@ -36,6 +36,7 @@ export interface SheetFrame {
   effect?: string;
   cw?: number;
   ch?: number;
+  loopFrom?: number;
 }
 
 const KODIK_MAIN = { src: u('/pets/kodik.webp'), cols: 8, rows: 9 };
@@ -117,6 +118,7 @@ const ALPACA: Record<PetAnim, SheetFrame> = {
 };
 
 const FOX_BASE = { src: u('/pets/fox-sheet.webp'), cols: 4, rows: 10, cw: 232, ch: 180 };
+const FOX_SLEEP: SheetFrame = { src: u('/pets/fox-sleep.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3, cw: 232, ch: 180, loopFrom: 4 };
 const FOX_WALK = { src: u('/pets/fox-walk.webp'), cols: 8, rows: 2, cw: 232, ch: 180 };
 const fx = (row: number, fps: number): SheetFrame => ({ ...FOX_BASE, row, frames: 4, fps });
 
@@ -127,11 +129,11 @@ const FOX: Record<PetAnim, SheetFrame> = {
   wave: fx(6, 9),
   jump: fx(4, 6),
   failed: fx(7, 3),
-  waiting: fx(3, 3),
+  waiting: FOX_SLEEP,
   working: { src: u('/pets/fox-study.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180 },
   review: fx(6, 9),
   eat: { src: u('/pets/fox-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6, cw: 232, ch: 180 },
-  sleep: fx(3, 3),
+  sleep: FOX_SLEEP,
   play: fx(4, 6),
   study: { src: u('/pets/fox-study.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180 },
   pet: fx(6, 5),

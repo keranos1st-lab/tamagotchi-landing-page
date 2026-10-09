@@ -93,9 +93,10 @@ export function PetSprite({ type, anim = 'idle', size = 208, className = '', sha
 
   useEffect(() => {
     setStep(0);
-    const id = setInterval(() => setStep((s) => (s + 1) % seq.length), 1000 / cfg.fps);
+    const from = cfg.loopFrom ?? 0;
+    const id = setInterval(() => setStep((s) => (s + 1 >= seq.length ? from : s + 1)), 1000 / cfg.fps);
     return () => clearInterval(id);
-  }, [type, anim, seq.length, cfg.fps]);
+  }, [type, anim, seq.length, cfg.fps, cfg.loopFrom]);
 
   useEffect(() => {
     setFidget('');
