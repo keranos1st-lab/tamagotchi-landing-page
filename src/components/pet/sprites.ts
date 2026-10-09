@@ -116,11 +116,35 @@ const ALPACA: Record<PetAnim, SheetFrame> = {
   trick: alp(8, 6),
 };
 
+const FOX_BASE = { src: u('/pets/fox-sheet.webp'), cols: 4, rows: 10, cw: 232, ch: 180 };
+const fx = (row: number, fps: number): SheetFrame => ({ ...FOX_BASE, row, frames: 4, fps });
+
+const FOX: Record<PetAnim, SheetFrame> = {
+  idle: fx(0, 4),
+  'run-right': fx(1, 8),
+  'run-left': fx(9, 8),
+  wave: fx(6, 9),
+  jump: fx(4, 6),
+  failed: fx(7, 3),
+  waiting: fx(3, 3),
+  working: fx(5, 4),
+  review: fx(6, 9),
+  eat: fx(2, 5),
+  sleep: fx(3, 3),
+  play: fx(4, 6),
+  study: fx(5, 4),
+  pet: fx(6, 5),
+  beg: fx(0, 4),
+  special: fx(8, 7),
+  flap: fx(6, 9),
+  trick: fx(8, 6),
+};
+
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   cat: KODIK,
   dog: ALPACA,
   bird: buildSheet('bird-sheet.webp'),
-  fox: buildSheet('fox-sheet.webp'),
+  fox: FOX,
   dragon: {
     ...buildSheet('dragon-sheet.webp'),
     flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
