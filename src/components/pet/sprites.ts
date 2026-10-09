@@ -161,6 +161,7 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
     ...buildSheet('dragon-sheet.webp'),
     flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
     eat: { src: u('/pets/dragon-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 },
+    trick: { src: u('/pets/dragon-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3.5, cw: 256, ch: 208 },
     play: DRAGON_PLAY,
     jump: DRAGON_PLAY,
     special: { ...DRAGON_PLAY, fps: 9 },

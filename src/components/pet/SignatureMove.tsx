@@ -27,10 +27,7 @@ const SCRIPTS: Record<PetType, Step[]> = {
     { anim: 'trick', ms: 800, cls: 'sm-dizzy', fx: 'dizzy' },
   ],
   dragon: [
-    { anim: 'flap', ms: 1100, cls: 'sm-hover' },
-    { anim: 'idle', ms: 450, cls: 'sm-inhale' },
-    { anim: 'run-right', ms: 1300, cls: 'sm-breathe-fire', fx: 'fire' },
-    { anim: 'idle', ms: 500, cls: 'sm-cough', fx: 'smoke' },
+    { anim: 'trick', ms: 2400 },
   ],
   bunny: [
     { anim: 'trick', ms: 700, cls: 'sm-crouch' },
@@ -91,12 +88,12 @@ export function SignatureMove({ type, size, onDone }: { type: PetType; size: num
 
   const step = script[Math.min(i, script.length - 1)];
   const idle = PET_SHEETS[type].idle;
-  const w = (idle.cw ?? CELL_W) * (size / (idle.ch ?? CELL_H));
+  const w = Math.max(...script.map((s) => PET_SHEETS[type][s.anim].cw ?? CELL_W)) * (size / (idle.ch ?? CELL_H));
   const mouth = MOUTH[type];
 
   return (
     <div className="relative" style={{ width: w, height: size }} aria-label={SIGNATURES[type].label}>
-      <div key={i} className={`sm-layer ${step.cls ?? ''}`} style={{ animationDuration: `${step.ms}ms` }}>
+      <div key={i} className={`sm-layer text-center ${step.cls ?? ''}`} style={{ animationDuration: `${step.ms}ms` }}>
         <PetSprite type={type} anim={step.anim} size={size} fx={false} still={step.fx === 'fire'}>
           {step.fx === 'fire' && mouth && (
             <div className="pointer-events-none absolute" style={{ left: `${mouth.x}%`, top: `${mouth.y}%` }}>
