@@ -10,6 +10,7 @@ import { wantsCuddleNow } from './useCuddle';
 import { sfx, ACTION_SFX, signatureSfx } from './sound';
 import { SIGNATURES, pickBubble } from './signature';
 import { SignatureMove, signatureDuration } from './SignatureMove';
+import { purrPhrase, petExtraPhrases } from './purrWords';
 import { useThinkingStore } from '@/store/thinkingStore';
 import { track } from '@/store/achievementStore';
 import { ThinkFxLayer, thinkingAnim } from './thinking';
@@ -272,8 +273,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     clearTimeout(askTimer.current);
     usePetStore.getState().pet();
     sfx.purr();
-    const fox = usePetStore.getState().type === 'fox';
-    const lines = [fox ? 'Фыр-фыр! Спасибо!' : 'Мррр! Спасибо!', 'Вот это счастье!', 'Люблю тебя!'];
+    const lines = [purrPhrase(usePetStore.getState().type, 'Мррр! Спасибо!'), 'Вот это счастье!', 'Люблю тебя!'];
     playOnce('pet', 2200, lines[Math.floor(Math.random() * lines.length)]);
   };
 
@@ -344,7 +344,8 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       } else {
         usePetStore.getState().pet();
         sfx.purr();
-        const lines = [usePetStore.getState().type === 'fox' ? 'Фыр-фыр…' : 'Мррр…', 'Ещё!', 'Приятно!', 'Хи-хи!'];
+        const t = usePetStore.getState().type;
+        const lines = [purrPhrase(t, 'Мррр…'), 'Ещё!', 'Приятно!', 'Хи-хи!', ...petExtraPhrases(t)];
         playOnce('pet', 1400, lines[Math.floor(Math.random() * lines.length)]);
       }
       clearTimeout(clickReset.current);

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePetStore } from '@/store/petStore';
 import { sfx } from './sound';
+import { purrPhrase, petExtraPhrases } from './purrWords';
 
 const PHRASES = ['Мррр…', 'Ещё-ещё!', 'Как приятно!', 'Обожаю тебя!', 'Хи-хи, щекотно!', 'Ты лучший!', 'Не останавливайся!'];
 const ASK_MORE = ['Погладь ещё?', 'А ещё?', 'Уже всё?..'];
@@ -51,8 +52,9 @@ export function usePetting() {
         setTimeout(() => setHearts((h) => h.filter((p) => p.id !== id)), 1100);
       }
       if (strokes.current === 1 || strokes.current % 6 === 0) {
-        const phrase = PHRASES[Math.floor(Math.random() * PHRASES.length)];
-      say(usePetStore.getState().type === 'fox' ? phrase.replace('Мррр', 'Фыр-фыр') : phrase);
+        const type = usePetStore.getState().type;
+        const list = [...PHRASES, ...petExtraPhrases(type)];
+        say(purrPhrase(type, list[Math.floor(Math.random() * list.length)]));
       }
 
       endTimer.current = setTimeout(() => {

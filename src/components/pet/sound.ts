@@ -115,6 +115,34 @@ function purr(c: AudioContext, dur = 1.2) {
   src.stop(t + dur);
 }
 
+function growl(c: AudioContext, dur = 1.1) {
+  const t = c.currentTime;
+  const o = c.createOscillator();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(70, t);
+  o.frequency.linearRampToValueAtTime(55, t + dur);
+  const lp = c.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 420;
+  const amp = c.createGain();
+  amp.gain.value = 0.5;
+  const lfo = c.createOscillator();
+  lfo.frequency.value = 28;
+  const lfoGain = c.createGain();
+  lfoGain.gain.value = 0.45;
+  lfo.connect(lfoGain).connect(amp.gain);
+  const env = c.createGain();
+  env.gain.setValueAtTime(0.0001, t);
+  env.gain.exponentialRampToValueAtTime(0.5, t + 0.12);
+  env.gain.setValueAtTime(0.5, t + dur - 0.3);
+  env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(lp).connect(amp).connect(env).connect(master!);
+  o.start(t);
+  lfo.start(t);
+  o.stop(t + dur + 0.02);
+  lfo.stop(t + dur + 0.02);
+}
+
 function fyr(c: AudioContext) {
   [0, 0.22].forEach((off) => {
     const t = c.currentTime + off;
@@ -154,7 +182,9 @@ export const sfx = {
   purr() {
     const c = ac();
     if (!c || !throttle('purr', 1100)) return;
-    if (usePetStore.getState().type === 'fox') fyr(c);
+    const type = usePetStore.getState().type;
+    if (type === 'fox') fyr(c);
+    else if (type === 'dragon') growl(c);
     else purr(c, 1.2);
   },
   heart() {
