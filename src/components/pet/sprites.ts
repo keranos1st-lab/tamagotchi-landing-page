@@ -144,7 +144,7 @@ const FOX: Record<PetAnim, SheetFrame> = {
   pet: FOX_PET,
   beg: FOX_IDLE,
   special: FOX_TRICK,
-  flap: fx(6, 9),
+  flap: FOX_IDLE,
   trick: FOX_TRICK,
 };
 
