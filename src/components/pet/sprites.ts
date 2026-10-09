@@ -149,6 +149,7 @@ const DRAGON_IDLE: SheetFrame = { src: u('/pets/dragon-idle.webp'), cols: 8, row
 const DRAGON_STUDY: SheetFrame = { src: u('/pets/dragon-study.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 4 };
 const DRAGON_SLEEP: SheetFrame = { src: u('/pets/dragon-sleep.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3, loopFrom: 4 };
 const DRAGON_SAD: SheetFrame = { src: u('/pets/dragon-sad.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, loopFrom: 4 };
+const DRAGON_PET: SheetFrame = { src: u('/pets/dragon-pet.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 };
 const DRAGON_WALK = { src: u('/pets/dragon-walk.webp'), cols: 8, rows: 2 };
 
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
@@ -160,7 +161,7 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
     ...buildSheet('dragon-sheet.webp'),
     idle: DRAGON_IDLE,
     failed: DRAGON_SAD,
-    pet: { ...DRAGON_IDLE, frames: 1, fps: 1 },
+    pet: DRAGON_PET,
     beg: DRAGON_IDLE,
     study: DRAGON_STUDY,
     working: DRAGON_STUDY,
