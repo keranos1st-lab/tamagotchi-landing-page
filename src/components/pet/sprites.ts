@@ -130,7 +130,7 @@ const FOX: Record<PetAnim, SheetFrame> = {
   waiting: fx(3, 3),
   working: fx(5, 4),
   review: fx(6, 9),
-  eat: fx(2, 5),
+  eat: { src: u('/pets/fox-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6, cw: 232, ch: 180 },
   sleep: fx(3, 3),
   play: fx(4, 6),
   study: fx(5, 4),
