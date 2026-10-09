@@ -124,6 +124,7 @@ const FOX_SAD: SheetFrame = { src: u('/pets/fox-sad.webp'), cols: 8, rows: 1, ro
 const FOX_PET: SheetFrame = { src: u('/pets/fox-pet.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 8, cw: 232, ch: 180 };
 const FOX_TRICK: SheetFrame = { src: u('/pets/fox-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 7, cw: 232, ch: 180 };
 const FOX_IDLE: SheetFrame = { src: u('/pets/fox-idle.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 4, cw: 232, ch: 180 };
+const FOX_WATCH: SheetFrame = { src: u('/pets/fox-watch.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180 };
 const FOX_WALK = { src: u('/pets/fox-walk.webp'), cols: 8, rows: 2, cw: 232, ch: 180 };
 const fx = (row: number, fps: number): SheetFrame => ({ ...FOX_BASE, row, frames: 4, fps });
 
@@ -136,7 +137,7 @@ const FOX: Record<PetAnim, SheetFrame> = {
   failed: FOX_SAD,
   waiting: FOX_SLEEP,
   working: { src: u('/pets/fox-study.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, cw: 232, ch: 180 },
-  review: fx(6, 9),
+  review: FOX_WATCH,
   eat: { src: u('/pets/fox-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6, cw: 232, ch: 180 },
   sleep: FOX_SLEEP,
   play: FOX_PLAY,
