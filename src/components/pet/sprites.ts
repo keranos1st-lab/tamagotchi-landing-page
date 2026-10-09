@@ -117,12 +117,13 @@ const ALPACA: Record<PetAnim, SheetFrame> = {
 };
 
 const FOX_BASE = { src: u('/pets/fox-sheet.webp'), cols: 4, rows: 10, cw: 232, ch: 180 };
+const FOX_WALK = { src: u('/pets/fox-walk.webp'), cols: 8, rows: 2, cw: 232, ch: 180 };
 const fx = (row: number, fps: number): SheetFrame => ({ ...FOX_BASE, row, frames: 4, fps });
 
 const FOX: Record<PetAnim, SheetFrame> = {
   idle: fx(0, 4),
-  'run-right': fx(1, 8),
-  'run-left': fx(9, 8),
+  'run-right': { ...FOX_WALK, row: 0, frames: 8, fps: 12 },
+  'run-left': { ...FOX_WALK, row: 1, frames: 8, fps: 12 },
   wave: fx(6, 9),
   jump: fx(4, 6),
   failed: fx(7, 3),
