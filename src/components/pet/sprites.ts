@@ -150,6 +150,7 @@ const DRAGON_STUDY: SheetFrame = { src: u('/pets/dragon-study.webp'), cols: 8, r
 const DRAGON_SLEEP: SheetFrame = { src: u('/pets/dragon-sleep.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3, loopFrom: 4 };
 const DRAGON_SAD: SheetFrame = { src: u('/pets/dragon-sad.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 5, loopFrom: 4 };
 const DRAGON_PET: SheetFrame = { src: u('/pets/dragon-pet.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 };
+const DRAGON_WAVE: SheetFrame = { src: u('/pets/dragon-wave.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 8 };
 const DRAGON_WALK = { src: u('/pets/dragon-walk.webp'), cols: 8, rows: 2 };
 
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
@@ -167,6 +168,8 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
     working: DRAGON_STUDY,
     sleep: DRAGON_SLEEP,
     waiting: DRAGON_SLEEP,
+    wave: DRAGON_WAVE,
+    review: DRAGON_WAVE,
     eat: { src: u('/pets/dragon-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 },
     trick: { src: u('/pets/dragon-trick.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 3.5, cw: 256, ch: 208 },
     play: DRAGON_PLAY,
