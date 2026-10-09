@@ -51,7 +51,8 @@ export function usePetting() {
         setTimeout(() => setHearts((h) => h.filter((p) => p.id !== id)), 1100);
       }
       if (strokes.current === 1 || strokes.current % 6 === 0) {
-        say(PHRASES[Math.floor(Math.random() * PHRASES.length)]);
+        const phrase = PHRASES[Math.floor(Math.random() * PHRASES.length)];
+      say(usePetStore.getState().type === 'fox' ? phrase.replace('Мррр', 'Фыр-фыр') : phrase);
       }
 
       endTimer.current = setTimeout(() => {

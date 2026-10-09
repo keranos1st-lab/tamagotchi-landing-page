@@ -272,7 +272,8 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
     clearTimeout(askTimer.current);
     usePetStore.getState().pet();
     sfx.purr();
-    const lines = ['Мррр! Спасибо!', 'Вот это счастье!', 'Люблю тебя!'];
+    const fox = usePetStore.getState().type === 'fox';
+    const lines = [fox ? 'Фыр-фыр! Спасибо!' : 'Мррр! Спасибо!', 'Вот это счастье!', 'Люблю тебя!'];
     playOnce('pet', 2200, lines[Math.floor(Math.random() * lines.length)]);
   };
 
@@ -343,7 +344,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
       } else {
         usePetStore.getState().pet();
         sfx.purr();
-        const lines = ['Мррр…', 'Ещё!', 'Приятно!', 'Хи-хи!'];
+        const lines = [usePetStore.getState().type === 'fox' ? 'Фыр-фыр…' : 'Мррр…', 'Ещё!', 'Приятно!', 'Хи-хи!'];
         playOnce('pet', 1400, lines[Math.floor(Math.random() * lines.length)]);
       }
       clearTimeout(clickReset.current);

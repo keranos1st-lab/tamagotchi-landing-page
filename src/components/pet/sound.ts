@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { usePetStore } from '@/store/petStore';
 
 interface SoundSettings {
   enabled: boolean;
@@ -114,6 +115,31 @@ function purr(c: AudioContext, dur = 1.2) {
   src.stop(t + dur);
 }
 
+function fyr(c: AudioContext) {
+  [0, 0.22].forEach((off) => {
+    const t = c.currentTime + off;
+    const dur = 0.16;
+    const len = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1800, t);
+    bp.frequency.exponentialRampToValueAtTime(900, t + dur);
+    bp.Q.value = 0.9;
+    const env = c.createGain();
+    env.gain.setValueAtTime(0.0001, t);
+    env.gain.exponentialRampToValueAtTime(0.7, t + 0.03);
+    env.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(bp).connect(env).connect(master!);
+    src.start(t);
+    src.stop(t + dur);
+  });
+}
+
 export const sfx = {
   click() {
     const c = ac();
@@ -128,7 +154,8 @@ export const sfx = {
   purr() {
     const c = ac();
     if (!c || !throttle('purr', 1100)) return;
-    purr(c, 1.2);
+    if (usePetStore.getState().type === 'fox') fyr(c);
+    else purr(c, 1.2);
   },
   heart() {
     const c = ac();
