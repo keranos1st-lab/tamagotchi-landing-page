@@ -149,6 +149,8 @@ const FOX: Record<PetAnim, SheetFrame> = {
   trick: FOX_TRICK,
 };
 
+const DRAGON_WALK = { src: u('/pets/dragon-walk.webp'), cols: 8, rows: 2 };
+
 export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   cat: KODIK,
   dog: ALPACA,
@@ -157,6 +159,8 @@ export const PET_SHEETS: Record<PetType, Record<PetAnim, SheetFrame>> = {
   dragon: {
     ...buildSheet('dragon-sheet.webp'),
     flap: { src: u('/pets/dragon-flap.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 16 },
+    'run-right': { ...DRAGON_WALK, row: 0, frames: 8, fps: 10 },
+    'run-left': { ...DRAGON_WALK, row: 1, frames: 8, fps: 10 },
   },
   bunny: buildSheet('bunny-sheet.webp'),
   panda: buildSheet('panda-sheet.webp'),

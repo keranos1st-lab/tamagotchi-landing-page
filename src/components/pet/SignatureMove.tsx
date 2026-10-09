@@ -61,7 +61,7 @@ const SCRIPTS: Record<PetType, Step[]> = {
 export const signatureDuration = (type: PetType) => SCRIPTS[type].reduce((s, x) => s + x.ms, 0);
 
 const MOUTH: Partial<Record<PetType, { x: number; y: number }>> = {
-  dragon: { x: 72.5, y: 57.5 },
+  dragon: { x: 75, y: 52 },
 };
 
 export function SignatureMove({ type, size, onDone }: { type: PetType; size: number; onDone?: () => void }) {

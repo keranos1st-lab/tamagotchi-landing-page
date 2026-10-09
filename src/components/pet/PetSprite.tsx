@@ -14,7 +14,7 @@ interface PetSpriteProps {
   children?: ReactNode;
 }
 
-const FLYERS: PetType[] = ['bird', 'dragon'];
+const FLYERS: PetType[] = ['bird'];
 
 const IDLE_MOTION: Record<PetType, string> = {
   cat: 'pm-idle-cat',
