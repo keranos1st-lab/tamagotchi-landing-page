@@ -45,6 +45,8 @@ const KODIK_PET: SheetFrame = { src: u('/pets/kodik-pet.webp'), cols: 8, rows: 1
 
 const KODIK_BEG: SheetFrame = { src: u('/pets/kodik-beg.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 };
 
+const KODIK_EAT: SheetFrame = { src: u('/pets/kodik-eat.webp'), cols: 8, rows: 1, row: 0, frames: 8, fps: 6 };
+
 const KODIK: Record<PetAnim, SheetFrame> = {
   idle: { ...KODIK_MAIN, row: 0, frames: 6, fps: 6 },
   'run-right': { ...KODIK_MAIN, row: 1, frames: 8, fps: 12 },
@@ -55,7 +57,7 @@ const KODIK: Record<PetAnim, SheetFrame> = {
   waiting: { ...KODIK_MAIN, row: 6, frames: 6, fps: 6 },
   working: { ...KODIK_MAIN, row: 7, frames: 6, fps: 9 },
   review: { ...KODIK_MAIN, row: 8, frames: 6, fps: 7 },
-  eat: { ...KODIK_CARE, row: 0, frames: 4, fps: 5 },
+  eat: KODIK_EAT,
   sleep: { ...KODIK_CARE, row: 1, frames: 4, fps: 3 },
   play: { src: u('/pets/cat-play.webp'), cols: 12, rows: 1, row: 0, frames: 12, fps: 7, cw: 322, ch: 313 },
   study: { ...KODIK_CARE, row: 3, frames: 4, fps: 4 },
