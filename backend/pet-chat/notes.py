@@ -52,6 +52,31 @@ def public(row):
     return {'id': row[0], 'text': row[1], 'version': row[2], 'updatedAt': row[3].isoformat()}
 
 
+ENDINGS = sorted((
+    'ями', 'ами', 'ого', 'его', 'ому', 'ему', 'ыми', 'ими', 'ией', 'ией', 'ией', 'ах', 'ях', 'ов', 'ев', 'ей', 'ом', 'ем',
+    'ой', 'ую', 'юю', 'ая', 'яя', 'ое', 'ее', 'ые', 'ие', 'ых', 'их', 'ым', 'им', 'ам', 'ям', 'ою', 'ею', 'ию', 'ья', 'ье',
+    'ть', 'ти', 'а', 'я', 'у', 'ю', 'е', 'ы', 'и', 'о', 'ь', 'й',
+), key=len, reverse=True)
+
+
+def stem(word):
+    word = word.lower().replace('ё', 'е')
+    if not word.isalpha():
+        return word
+    for ending in ENDINGS:
+        if word.endswith(ending) and len(word) - len(ending) >= 3:
+            word = word[:-len(ending)]
+            break
+    if len(word) >= 5 and word[-1] in 'еиюя':
+        word = word[:-1]
+    return word
+
+
+def matches_text(text, stems):
+    low = str(text).lower().replace('ё', 'е')
+    return all(st in low for st in stems)
+
+
 def selector(cur, schema, uid, query):
     query = query.strip().strip('«»"')
     numeric = re.fullmatch(r'(?:номер\s+|№\s*|#\s*)?(\d+)', query, re.I)
@@ -64,17 +89,11 @@ def selector(cur, schema, uid, query):
         cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s ORDER BY created_at DESC, id DESC LIMIT 1', (uid,))
     else:
         query = re.sub(r'^(?:про|о|об|по теме)\s+', '', query, flags=re.I)
-        words = query.split()[:12]
-        conditions = []
-        args = [uid]
-        for word in words:
-            escaped = word.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
-            conditions.append("text ILIKE %s")
-            args.append('%' + escaped + '%')
-        where = " AND (to_tsvector('russian',text) @@ plainto_tsquery('russian',%s) OR (" + ' AND '.join(conditions) + '))' if conditions else ''
-        if conditions:
-            args.insert(1, query)
-        cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s{where} ORDER BY updated_at DESC, id DESC LIMIT 6', tuple(args))
+        words = re.findall(r'[0-9A-Za-zА-Яа-яЁё]+', query)[:12]
+        stems = [stem(w) for w in words]
+        cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s ORDER BY updated_at DESC, id DESC LIMIT {MAX_NOTES}', (uid,))
+        rows = cur.fetchall()
+        return [row for row in rows if stems and matches_text(row[1], stems)][:6]
     return cur.fetchall()
 
 
