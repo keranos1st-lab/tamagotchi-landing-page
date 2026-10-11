@@ -8,14 +8,20 @@ MAX_NOTES = 500
 DAILY_COMMANDS = 1000
 ID = re.compile(r'^[A-Za-z0-9_-]{8,96}$')
 
+QUICK_CREATE = re.compile(r'^(?:(?:запиши|сохрани|добавь|занеси|внеси)\s+(?:мне\s+)?(?:это\s+)?(?:в|во)\s+(?:мой\s+|моё\s+|мои\s+)?(?:блокнот|заметки|заметку)|запиши(?:\s+мне)?(?=\s*,?\s+что(?:\s|$))|сделай\s+(?:мне\s+)?(?:новую\s+)?заметку)\b(.*)$', re.I | re.S)
+
 
 def parse(message, name=''):
     text = str(message or '').strip()
     names = ['кодик', 'питомец'] + ([name] if isinstance(name, str) and 0 < len(name) <= 80 else [])
     prefix = '|'.join(re.escape(n) for n in names)
-    text = re.sub(rf'^(?:эй\s+)?(?:{prefix})(?:\s*[,!:]\s*|\s+(?=(?:пожалуйста|запиши|сохрани|создай|добавь|найди|покажи|прочитай|исправь|измени|обнови|перепиши)\b))', '', text, flags=re.I)
+    text = re.sub(rf'^(?:эй\s+)?(?:{prefix})(?:\s*[,!:]\s*|\s+(?=(?:пожалуйста|запиши|сохрани|создай|сделай|занеси|внеси|добавь|найди|покажи|прочитай|исправь|измени|обнови|перепиши)\b))', '', text, flags=re.I)
     text = re.sub(r'^пожалуйста[,\s]+', '', text, flags=re.I)
     text = re.sub(r'^(найди|покажи|прочитай|исправь|измени|обнови|перепиши)\s+последнюю\s+заметку\b', r'\1 заметку последнюю', text, flags=re.I)
+    quick = QUICK_CREATE.match(text)
+    if quick:
+        body = re.sub(r'^(?:что\b[\s,:]*)', '', quick[1].strip().lstrip(':,—–').strip(), flags=re.I).strip()
+        return {'action': 'create', 'text': body, 'query': ''}
     verb = re.match(r'^(запиши|сохрани|создай|добавь|найди|покажи|прочитай|исправь|измени|обнови|перепиши)\s+(?:мне\s+)?(?:новую\s+)?(заметку|заметки|идею|запись)\b(.*)$', text, re.I | re.S)
     if not verb:
         return None
