@@ -142,6 +142,75 @@ class Timezones(unittest.TestCase):
         self.assertIsNone(r.public_reminder(None, None, None, None, None, 0))
 
 
+@unittest.skipUnless(HAS_TZ, 'нужна база часовых поясов (tzdata)')
+class Vladivostok(unittest.TestCase):
+    CMD = {'tzname': 'Asia/Vladivostok', 'tzoff': 600}
+    PHRASE = 'завтра в 12:00 позвонить Сергею'
+
+    def spec(self, utc_now, phrase=None, cmd=None):
+        status, value = notes._spec_for(phrase or self.PHRASE, cmd or self.CMD, utc_now)
+        self.assertEqual(status, 'ok', (utc_now, value))
+        return value
+
+    def check(self, utc_now, local_date, hour=12, minute=0):
+        value = self.spec(utc_now)
+        proposal = notes._proposal(value, 1)
+        self.assertEqual(proposal['dueLocal'], f'{local_date}T{hour:02d}:{minute:02d}')
+        self.assertEqual(proposal['tz'], 'Asia/Vladivostok')
+        self.assertEqual(proposal['tzLabel'], 'Asia/Vladivostok, UTC+10:00')
+        self.assertEqual(value['due_at'], datetime(*map(int, local_date.split('-')), hour, minute, tzinfo=ZoneInfo('Asia/Vladivostok')).astimezone(UTC))
+
+    def test_offset_is_plus_ten_all_year(self):
+        zone = ZoneInfo('Asia/Vladivostok')
+        for month in (1, 7):
+            self.assertEqual(datetime(2026, month, 1, 12, tzinfo=zone).utcoffset(), timedelta(hours=10))
+
+    def test_tomorrow_noon_is_local_noon(self):
+        self.check(datetime(2026, 10, 11, 5, 0, tzinfo=UTC), '2026-10-12')
+        self.assertEqual(self.spec(datetime(2026, 10, 11, 5, 0, tzinfo=UTC))['due_at'], datetime(2026, 10, 12, 2, 0, tzinfo=UTC))
+
+    def test_before_local_midnight_tomorrow_is_next_local_day(self):
+        self.check(datetime(2026, 10, 11, 13, 30, tzinfo=UTC), '2026-10-12')
+        self.check(datetime(2026, 10, 11, 13, 59, tzinfo=UTC), '2026-10-12')
+
+    def test_after_local_midnight_tomorrow_moves_one_day_forward(self):
+        self.check(datetime(2026, 10, 11, 14, 1, tzinfo=UTC), '2026-10-13')
+        self.check(datetime(2026, 10, 11, 14, 30, tzinfo=UTC), '2026-10-13')
+
+    def test_year_and_month_boundaries(self):
+        self.check(datetime(2026, 12, 31, 13, 45, tzinfo=UTC), '2027-01-01')
+        self.check(datetime(2026, 12, 31, 14, 10, tzinfo=UTC), '2027-01-02')
+        self.check(datetime(2027, 2, 28, 13, 50, tzinfo=UTC), '2027-03-01')
+
+    def test_today_uses_local_date(self):
+        value = self.spec(datetime(2026, 10, 11, 13, 50, tzinfo=UTC), 'сегодня в 23:55 выключить')
+        self.assertEqual(notes._proposal(value, 1)['dueLocal'], '2026-10-11T23:55')
+        value = self.spec(datetime(2026, 10, 11, 14, 30, tzinfo=UTC), 'сегодня в 12:00 встреча')
+        self.assertEqual(notes._proposal(value, 1)['dueLocal'], '2026-10-12T12:00')
+
+    def test_offset_only_when_zone_name_is_missing(self):
+        value = self.spec(datetime(2026, 10, 11, 14, 30, tzinfo=UTC), cmd={'tzname': '', 'tzoff': 600})
+        proposal = notes._proposal(value, 1)
+        self.assertEqual(proposal['tzLabel'], 'UTC+10:00')
+        self.assertEqual(proposal['dueLocal'], '2026-10-13T12:00')
+        self.assertEqual(value['due_at'], datetime(2026, 10, 13, 2, 0, tzinfo=UTC))
+
+    def test_same_phrase_differs_by_zone(self):
+        now = datetime(2026, 10, 11, 14, 30, tzinfo=UTC)
+        due = {name: self.spec(now, cmd={'tzname': name, 'tzoff': 0})['due_at'] for name in ('UTC', 'Europe/Moscow', 'Asia/Vladivostok')}
+        self.assertEqual(due['UTC'], datetime(2026, 10, 12, 12, 0, tzinfo=UTC))
+        self.assertEqual(due['Europe/Moscow'], datetime(2026, 10, 12, 9, 0, tzinfo=UTC))
+        self.assertEqual(due['Asia/Vladivostok'], datetime(2026, 10, 13, 2, 0, tzinfo=UTC))
+
+    def test_saved_reminder_reads_back_in_local_time(self):
+        spec = r.build('2026-10-13T12:00', 'Asia/Vladivostok', 15, datetime(2026, 10, 11, 22, 0, tzinfo=UTC))
+        pub = r.public_reminder(spec['due_at'], spec['lead'], spec['tz'], spec['remind_at'], 'active', 1)
+        self.assertEqual(pub['dueLocal'], '2026-10-13T12:00')
+        self.assertEqual(pub['tzLabel'], 'Asia/Vladivostok, UTC+10:00')
+        self.assertEqual(pub['dueAt'], '2026-10-13T02:00:00+00:00')
+        self.assertEqual(pub['remindAt'], '2026-10-13T01:45:00+00:00')
+
+
 class Commands(unittest.TestCase):
     def test_remind_commands_are_parsed(self):
         cmd = notes.parse('поставь напоминание для заметки 12 завтра в 15:00 за 30 минут', 'Кодик')
