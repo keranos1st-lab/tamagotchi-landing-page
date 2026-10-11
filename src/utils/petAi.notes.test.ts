@@ -2,7 +2,7 @@
 import {beforeEach,expect,test} from 'bun:test';
 import {Window} from 'happy-dom';
 const win=new Window({url:'https://localhost/'});
-Object.defineProperty(globalThis,'localStorage',{configurable:true,value:win.localStorage});
+Object.defineProperty(globalThis,'localStorage',{configurable:true,writable:true,value:win.localStorage});
 const {askPet}=await import('./petAi');
 const {useAuthStore}=await import('@/store/authStore');
 const {isNoteCommand}=await import('./noteCommands');
