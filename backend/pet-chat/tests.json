@@ -150,6 +150,16 @@
         "clarify": true
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Notes require login",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "message": "Кодик, запиши заметку: тест",
+        "requestId": "test-request-0001"
+      },
+      "expectedStatus": 401
     }
   ]
 }
