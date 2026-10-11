@@ -22,7 +22,6 @@ import urllib.request
 import psycopg2
 
 import websearch
-import notes
 
 API_URL = 'https://polza.ai/api/v1/chat/completions'
 DEFAULT_MODEL = 'openai/gpt-4o-mini'
@@ -47,7 +46,7 @@ SEARCH_FEE_RUB = 0.595
 CORS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Auth-Token, X-Client-Id, X-User-Ai-Key, X-User-Ai-Provider, X-User-Ai-Model',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Client-Id, X-User-Ai-Key, X-User-Ai-Provider, X-User-Ai-Model',
     'Access-Control-Max-Age': '86400',
 }
 
@@ -942,20 +941,13 @@ def handler(event: dict, context) -> dict:
     if method != 'POST':
         return fail(405, 'bad_request', False)
 
+    if not own and not os.environ.get('POLZA_AI_API_KEY'):
+        return fail(503, 'no_key', False)
+
     try:
         data = json.loads(event.get('body') or '{}')
     except json.JSONDecodeError:
         return fail(400, 'bad_request', False)
-
-    if not isinstance(data, dict):
-        return fail(400, 'bad_request', False)
-    if len(str(data.get('message') or '')) > MAX_MESSAGE:
-        return fail(413, 'too_long', False, {'limit': MAX_MESSAGE})
-    note_result = notes.handle(data, headers, db, SCHEMA)
-    if note_result is not None:
-        return respond(*note_result)
-    if not own and not os.environ.get('POLZA_AI_API_KEY'):
-        return fail(503, 'no_key', False)
 
     pet = data.get('pet') or {}
     iq = parse_iq(pet)
@@ -1041,7 +1033,7 @@ def handler(event: dict, context) -> dict:
                 'ms': int((time.time() - started_all) * 1000),
             })
 
-    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task), voice, iq) + '\nЛичные заметки обрабатывает отдельный серверный инструмент. В этом ответе инструмент не вызывался: не утверждай, что сохранил, нашёл или исправил заметки. Для этого предложи явную команду: запиши заметку: текст; найди заметку про тему; исправь заметку номер N: новый текст.'}]
+    messages = [{'role': 'system', 'content': build_system(pet, memory, bool(task), voice, iq)}]
     messages += clean_history(data.get('history') or [])
     messages.append({'role': 'user', 'content': user_content})
 

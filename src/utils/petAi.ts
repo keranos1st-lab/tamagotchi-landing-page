@@ -111,7 +111,7 @@ export async function askPet(args: {
     const res = await fetch(URL, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId(), ...(token ? { 'X-Auth-Token': token } : {}), ...ownKeyHeaders() },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId(), ...(noteCommand && token ? { 'X-Auth-Token': token } : {}), ...ownKeyHeaders() },
       body: JSON.stringify({
         requestId,
         message,

@@ -81,7 +81,7 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
     else if (elapsed >= MAX_SECONDS * 1000) fireAuto();
   };
 
-  stream.getAudioTracks().forEach((t) => {
+  stream.getAudioTracks?.().forEach((t) => {
     t.onended = () => {
       if (!closed) hooks.onError?.('Микрофон отключился. Проверь разрешение и попробуй ещё раз.');
     };
