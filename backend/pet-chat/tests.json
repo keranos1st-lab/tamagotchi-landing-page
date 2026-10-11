@@ -171,6 +171,40 @@
         "offset": 0
       },
       "expectedStatus": 401
+    },
+    {
+      "name": "Notes due requires login",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "notesApi": "due"
+      },
+      "expectedStatus": 401
+    },
+    {
+      "name": "Notes remind requires login",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "notesApi": "remind",
+        "id": 1,
+        "reminder": null,
+        "requestId": "test-request-0002"
+      },
+      "expectedStatus": 401
+    },
+    {
+      "name": "Notes ack requires login",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "notesApi": "ack",
+        "id": 1,
+        "seq": 1,
+        "mode": "done",
+        "requestId": "test-request-0003"
+      },
+      "expectedStatus": 401
     }
   ]
 }

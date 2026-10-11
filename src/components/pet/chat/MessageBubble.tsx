@@ -5,6 +5,7 @@ import { TEXT_ACTIONS } from '@/utils/petAi';
 import { RichText } from '../RichText';
 import { useVoiceStore } from '@/store/voiceStore';
 import { speakText } from '@/utils/voiceDialog';
+import { ReminderProposalCard } from './ReminderProposalCard';
 
 function CopyBtn({ text }: { text: string }) {
   const [done, setDone] = useState(false);
@@ -164,6 +165,7 @@ export function MessageBubble({
         )}
         <RichText text={msg.text} />
         {msg.searched && msg.sources && msg.sources.length > 0 && <SourcesList sources={msg.sources} verified={msg.verified} />}
+        {msg.reminderProposal && <ReminderProposalCard msgId={msg.id} proposal={msg.reminderProposal} />}
         <div className="mt-2 flex items-center gap-3">
           {msg.kind === 'legacy' ? (
             <span className="text-[10px] font-semibold text-white/35">Шаблонный ответ из старой версии — не AI</span>

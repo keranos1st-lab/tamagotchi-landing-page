@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import Icon from '@/components/ui/icon';
 import { useAuthStore } from '@/store/authStore';
 import { useNoteDraft } from '@/store/noteDraftStore';
-import { listNotes, NOTES_CHANGED, NOTES_OPEN, type Note, type NotesErr } from '@/utils/notesApi';
+import { defaultDueLocal, formatDue, listNotes, newRequestId, NOTES_CHANGED, NOTES_OPEN, notifyNotesChanged, setReminder, type Note, type NotesErr } from '@/utils/notesApi';
 import { openSettings } from '../account/AccountButton';
 import { NoteEditor } from './NoteEditor';
 
@@ -29,6 +29,8 @@ export function NotesDialog() {
   const [applied, setApplied] = useState('');
   const [current, setCurrent] = useState<Note | null>(null);
   const [moreBusy, setMoreBusy] = useState(false);
+  const [remBusy, setRemBusy] = useState(false);
+  const [remError, setRemError] = useState<string | null>(null);
   const seq = useRef(0);
   const ctrl = useRef<AbortController | null>(null);
 
@@ -90,8 +92,10 @@ export function NotesDialog() {
     return () => clearTimeout(t);
   }, [query]);
 
-  const startEdit = (note: Note | null) => {
-    draft.begin(note);
+  const startEdit = (note: Note | null, withReminder = false) => {
+    setRemError(null);
+    draft.begin(note, withReminder ? { dueLocal: '', tz: '', lead: 15 } : null);
+    if (withReminder) useNoteDraft.getState().setDue(defaultDueLocal());
     setView('edit');
   };
 
@@ -105,6 +109,20 @@ export function NotesDialog() {
     setCurrent(note);
     setView('read');
     load(applied);
+  };
+
+  const disableReminder = async (note: Note) => {
+    if (remBusy) return;
+    setRemBusy(true);
+    setRemError(null);
+    const res = await setReminder({ id: note.id, reminder: null, requestId: newRequestId() });
+    setRemBusy(false);
+    if (!res.ok) {
+      setRemError(res.message);
+      return;
+    }
+    setCurrent(res.note);
+    notifyNotesChanged();
   };
 
   const loggedOut = !token;
@@ -146,7 +164,42 @@ export function NotesDialog() {
           <NoteEditor onSaved={onSaved} onCancel={leaveEditor} />
         ) : view === 'read' && current ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-4 text-sm leading-relaxed sm:p-5">{current.text}</div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
+              <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">{current.text}</div>
+              {current.reminder && (
+                <div className={`rounded-2xl border px-3 py-2.5 text-sm ${current.reminder.state === 'done' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-100' : 'border-amber-300/25 bg-amber-400/10 text-amber-100'}`}>
+                  <div className="flex items-center gap-2 font-bold">
+                    <Icon name={current.reminder.state === 'done' ? 'CircleCheck' : 'BellRing'} size={15} />
+                    {current.reminder.state === 'done' ? 'Напоминание выполнено' : 'Напоминание'}
+                  </div>
+                  <div className="mt-1 text-xs opacity-85">
+                    {formatDue(current.reminder)}
+                    {current.reminder.state === 'active' && `, напомню ${current.reminder.leadText}`}
+                  </div>
+                  {current.reminder.state === 'active' && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button onClick={() => startEdit(current)} className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-bold hover:bg-white/20">
+                        Изменить время
+                      </button>
+                      <button onClick={() => disableReminder(current)} disabled={remBusy} className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-bold hover:bg-white/20 disabled:opacity-50">
+                        {remBusy ? 'Отключаю…' : 'Отключить'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!current.reminder && (
+                <button onClick={() => startEdit(current, true)} className="flex items-center gap-2 rounded-xl border border-dashed border-white/20 px-3 py-2 text-xs font-bold text-white/60 hover:text-white">
+                  <Icon name="BellPlus" size={14} />
+                  Добавить напоминание
+                </button>
+              )}
+              {remError && (
+                <div role="alert" className="rounded-xl border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">
+                  {remError}
+                </div>
+              )}
+            </div>
             <div className="flex items-center justify-between gap-2 border-t border-white/10 px-4 py-3 sm:px-5">
               <span className="text-xs text-white/40">
                 {fmt(current.updatedAt)} · версия {current.version}
@@ -232,8 +285,22 @@ export function NotesDialog() {
                     className="block w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3 text-left transition hover:bg-white/[0.08]"
                   >
                     <div className="line-clamp-2 break-words text-sm">{n.text}</div>
-                    <div className="mt-1 text-[11px] text-white/40">
-                      №{n.id} · {fmt(n.updatedAt)}
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-white/40">
+                      <span>
+                        №{n.id} · {fmt(n.updatedAt)}
+                      </span>
+                      {n.reminder && n.reminder.state === 'active' && (
+                        <span className="flex items-center gap-1 text-amber-200/90">
+                          <Icon name="BellRing" size={11} />
+                          {n.reminder.when.split(', ').slice(1).join(', ')}
+                        </span>
+                      )}
+                      {n.reminder && n.reminder.state === 'done' && (
+                        <span className="flex items-center gap-1 text-emerald-300/80">
+                          <Icon name="CircleCheck" size={11} />
+                          выполнено
+                        </span>
+                      )}
                     </div>
                   </button>
                 ))}

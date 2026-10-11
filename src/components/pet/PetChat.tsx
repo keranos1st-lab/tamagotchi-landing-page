@@ -94,6 +94,7 @@ export function PetChat() {
         sources: res.sources,
         spoken: res.spoken,
         asOf: res.asOf,
+        reminderProposal: res.reminderProposal ? { ...res.reminderProposal, state: 'pending' } : undefined,
       });
       if (useVoiceStore.getState().speakReplies && !task) speakText(res.spoken ?? res.reply);
       earn(task ? 'help' : 'chat', res.declined ? 1 : task ? 6 : 3);

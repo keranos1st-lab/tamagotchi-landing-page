@@ -1,6 +1,6 @@
 import func2url from '../../backend/func2url.json';
 import { isNoteCommand } from './noteCommands';
-import { notifyNotesChanged } from './notesApi';
+import { notifyNotesChanged, type ReminderProposal } from './notesApi';
 import { useAuthStore } from '@/store/authStore';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
 import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
@@ -21,6 +21,7 @@ export type AiOk = {
   asOf?: string;
   noteAction?: 'create' | 'find' | 'update';
   notes?: Array<{ id: number; text: string; version: number; updatedAt: string }>;
+  reminderProposal?: ReminderProposal;
 };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
@@ -155,6 +156,7 @@ export async function askPet(args: {
         spoken: typeof data.spoken === 'string' && data.spoken ? data.spoken : undefined,
         noteAction: ['create','find','update'].includes(data.noteAction) ? data.noteAction : undefined,
         notes: Array.isArray(data.notes) ? data.notes : undefined,
+        reminderProposal: data.reminderProposal && typeof data.reminderProposal === 'object' ? data.reminderProposal : undefined,
         asOf: typeof data.asOf === 'string' ? data.asOf : undefined,
       };
     }

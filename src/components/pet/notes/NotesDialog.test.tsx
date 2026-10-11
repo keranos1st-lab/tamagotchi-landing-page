@@ -31,8 +31,10 @@ afterAll(() => {
   }
 });
 
-type Note = { id: number; text: string; version: number; updatedAt: string };
-const mk = (id: number, text: string, version = 1): Note => ({ id, text, version, updatedAt: '2026-10-11T10:00:00+00:00' });
+type Rem = { dueAt: string; dueLocal: string; tz: string; tzLabel: string; lead: number; leadText: string; remindAt: string; state: 'active' | 'done'; seq: number; when: string; text: string };
+type Note = { id: number; text: string; version: number; updatedAt: string; reminder?: Rem | null };
+const mkRem = (dueLocal: string, lead = 15): Rem => ({ dueAt: '2026-10-12T09:00:00+00:00', dueLocal, tz: 'Europe/Moscow', tzLabel: 'Europe/Moscow, UTC+03:00', lead, leadText: lead ? `за ${lead} минут` : 'в указанное время', remindAt: '2026-10-12T08:45:00+00:00', state: 'active', seq: 1, when: 'понедельник, 12 октября 2026, 12:00', text: 't' });
+const mk = (id: number, text: string, version = 1, reminder: Rem | null = null): Note => ({ id, text, version, updatedAt: '2026-10-11T10:00:00+00:00', reminder });
 let store: Note[] = [];
 let failList = false;
 let failSave = false;
@@ -59,9 +61,17 @@ beforeEach(async () => {
       const rows = store.filter((n) => !q || n.text.toLowerCase().includes(q));
       return { ok: true, status: 200, json: async () => ({ ok: true, notes: rows, total: rows.length, offset: 0, hasMore: false }) } as Response;
     }
+    if (body.notesApi === 'remind') {
+      const cur = store.find((x) => x.id === body.id)!;
+      const n = { ...cur, version: cur.version + 1, reminder: body.reminder ? mkRem(body.reminder.dueLocal, body.reminder.lead) : null };
+      store = store.map((x) => (x.id === n.id ? n : x));
+      return { ok: true, status: 200, json: async () => ({ ok: true, action: 'remind', note: n, changed: true }) } as Response;
+    }
     if (failSave) return { ok: false, status: 503, json: async () => ({ error: 'notes_unavailable', message: 'Не удалось подтвердить сохранение', retryable: true }) } as Response;
-    const n = body.id ? { ...store.find((x) => x.id === body.id)!, text: body.text, version: 2 } : mk(100 + store.length, body.text);
-    store = body.id ? store.map((x) => (x.id === n.id ? n : x)) : [n, ...store];
+    const base = body.id ? store.find((x) => x.id === body.id)! : null;
+    const reminder = 'reminder' in body ? (body.reminder ? mkRem(body.reminder.dueLocal, body.reminder.lead) : null) : base?.reminder ?? null;
+    const n = base ? { ...base, text: body.text, version: 2, reminder } : mk(100 + store.length, body.text, 1, reminder);
+    store = base ? store.map((x) => (x.id === n.id ? n : x)) : [n, ...store];
     return { ok: true, status: 200, json: async () => ({ ok: true, action: body.id ? 'update' : 'create', note: n, changed: true }) } as Response;
   }) as typeof fetch;
 });
@@ -183,4 +193,94 @@ describe('окно «Заметки»', () => {
     await wait();
     expect(text()).toContain('создано голосом');
   });
+
+  test('в списке видна метка напоминания и «выполнено»', async () => {
+    store = [mk(2, 'созвон', 1, mkRem('2026-10-12T12:00')), mk(1, 'обычная заметка')];
+    await open();
+    expect(text()).toContain('12 октября 2026');
+    expect(text()).toContain('обычная заметка');
+  });
+
+  test('просмотр заметки с напоминанием показывает дату, время, пояс и «заранее»', async () => {
+    store = [mk(2, 'созвон', 1, mkRem('2026-10-12T12:00', 30))];
+    await open();
+    await click('созвон');
+    expect(text()).toContain('понедельник, 12 октября 2026, 12:00');
+    expect(text()).toContain('UTC+03:00');
+    expect(text()).toContain('за 30 минут');
+    expect(text()).toContain('Изменить время');
+    expect(text()).toContain('Отключить');
+  });
+
+  test('отключение напоминания не трогает текст и шлёт reminder: null', async () => {
+    store = [mk(2, 'созвон', 1, mkRem('2026-10-12T12:00'))];
+    await open();
+    await click('созвон');
+    await click('Отключить');
+    const call = bodies.find((b) => b.notesApi === 'remind')!;
+    expect(call).toMatchObject({ id: 2, reminder: null });
+    expect(store[0].text).toBe('созвон');
+    expect(store[0].reminder).toBe(null);
+    expect(text()).toContain('Добавить напоминание');
+  });
+
+  test('обычная заметка: напоминание выключено, сохраняется без поля reminder', async () => {
+    await open();
+    await click('Новая');
+    expect(text()).toContain('Без даты и времени это обычная заметка.');
+    await type(q().getByPlaceholderText('Что записать?'), 'добавить Кодику анимацию');
+    await click('Сохранить');
+    const save = bodies.find((b) => b.notesApi === 'save')!;
+    expect('reminder' in save).toBe(false);
+  });
+
+  test('создание с напоминанием: по умолчанию «за 15 минут», дата и время уходят вместе с поясом', async () => {
+    await open();
+    await click('Новая');
+    await type(q().getByPlaceholderText('Что записать?'), 'позвонить Сергею');
+    await rtl.act(async () => { rtl.fireEvent.click(q().getByRole('switch', { name: 'Напоминание' })); });
+    expect(q().getByText('За 15 минут').getAttribute('aria-pressed')).toBe('true');
+    await type(q().getByLabelText('Дата напоминания'), '2026-10-12');
+    await type(q().getByLabelText('Время напоминания'), '12:00');
+    await click('Сохранить');
+    const save = bodies.find((b) => b.notesApi === 'save')!;
+    expect(save.reminder).toMatchObject({ dueLocal: '2026-10-12T12:00', lead: 15 });
+    expect(typeof (save.reminder as { tz: string }).tz).toBe('string');
+  });
+
+  test('перенос напоминания: можно выбрать «за 30 минут» и «в указанное время»', async () => {
+    store = [mk(2, 'созвон', 1, mkRem('2026-10-12T12:00'))];
+    await open();
+    await click('созвон');
+    await click('Изменить время');
+    await click('За 30 минут');
+    await type(q().getByLabelText('Время напоминания'), '15:45');
+    await click('Сохранить');
+    expect(bodies.find((b) => b.notesApi === 'save')!.reminder).toMatchObject({ dueLocal: '2026-10-12T15:45', lead: 30 });
+  });
+
+  test('правка только текста не меняет напоминание (поле reminder не отправляется)', async () => {
+    store = [mk(2, 'созвон', 1, mkRem('2026-10-12T12:00'))];
+    await open();
+    await click('созвон');
+    await click('Изменить время');
+    await type(q().getByPlaceholderText('Что записать?'), 'созвон с Сергеем');
+    await click('Сохранить');
+    const save = bodies.find((b) => b.notesApi === 'save')!;
+    expect('reminder' in save).toBe(false);
+    expect(store[0].reminder?.dueLocal).toBe('2026-10-12T12:00');
+  });
+
+  test('ошибка «время прошло» не теряет введённое', async () => {
+    store = [];
+    await open();
+    await click('Новая');
+    await type(q().getByPlaceholderText('Что записать?'), 'не потерять');
+    await rtl.act(async () => { rtl.fireEvent.click(q().getByRole('switch', { name: 'Напоминание' })); });
+    failSave = true;
+    await click('Сохранить');
+    expect((q().getByPlaceholderText('Что записать?') as HTMLTextAreaElement).value).toBe('не потерять');
+    expect(useNoteDraft.getState().remindOn).toBe(true);
+  });
 });
+

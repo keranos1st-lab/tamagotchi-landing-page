@@ -3,6 +3,7 @@ import { PetSprite } from './PetSprite';
 import { ACTION_ANIM, type PetAnim } from './sprites';
 import { FloatingPet } from './FloatingPet';
 import { NotesDialog } from './notes/NotesDialog';
+import { ReminderAlert } from './notes/ReminderAlert';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetNotifications } from './useNotifications';
 import { usePetting } from './usePetting';
@@ -111,6 +112,7 @@ export function GameScreen() {
     <div className="pa-app flex flex-col">
       <FloatingPet />
       <NotesDialog />
+      <ReminderAlert />
       <LevelUpModal />
       <IqLevelWatcher />
       <IqLevelToast />

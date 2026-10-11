@@ -164,6 +164,7 @@ async function askAndSpeak(my: number, text: string) {
     sources: res.sources,
     spoken: res.spoken,
     asOf: res.asOf,
+    reminderProposal: res.reminderProposal ? { ...res.reminderProposal, state: 'pending' } : undefined,
   });
   usePetStore.getState().earn('chat', res.declined ? 1 : 3);
   useThinkingStore.getState().cheer();

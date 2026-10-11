@@ -23,6 +23,7 @@ export interface ChatMessage {
   task?: { action: TextAction; source: string };
   error?: { code: string; message: string; retryable: boolean };
   retry?: { message: string; requestId?: string; task?: { action: TextAction; source: string } };
+  reminderProposal?: { noteId: number; dueLocal: string; tz: string; lead: 0 | 15 | 30; when: string; tzLabel: string; leadText: string; state?: 'pending' | 'saved' | 'dismissed' };
 }
 
 const TICK_MS = 5000;
