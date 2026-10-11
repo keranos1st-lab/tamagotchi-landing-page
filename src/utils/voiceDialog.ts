@@ -79,6 +79,7 @@ async function startRecorder(my: number) {
   try {
     rec = await startRecording({
       onLevel: (level) => vs().set({ level }),
+      onError: (message) => { if (turn === my) { rec?.cancel(); rec = null; fail(message); } },
       onAutoStop: () => {
         if (turn === my) finishListening();
       },
@@ -123,7 +124,7 @@ async function finishListening() {
 async function askAndSpeak(my: number, text: string) {
   vs().set({ status: 'thinking', heard: text });
   const pet = usePetStore.getState();
-  pet.addChatMessage('user', text);
+  const requestId = pet.addChatMessage('user', text);
   track.bump('chat');
   useThinkingStore.getState().setThinking(true);
 
@@ -135,6 +136,7 @@ async function askAndSpeak(my: number, text: string) {
     history: usePetStore.getState().chatHistory.slice(0, -1),
     memory: mem.consent ? mem.items.map((i) => i.text) : [],
     message: text,
+    requestId,
     voice: true,
     signal: ctrl.signal,
   }).finally(() => {
@@ -148,7 +150,7 @@ async function askAndSpeak(my: number, text: string) {
     usePetStore.getState().addChatMessage('pet', '', {
       kind: 'error',
       error: { code: res.code, message: res.message, retryable: res.retryable },
-      retry: { message: text },
+      retry: { message: text, requestId },
     });
     const own = useAiKeyStore.getState().enabled;
     return fail(own || !res.code.startsWith('daily') ? res.message : 'Дневной лимит AI исчерпан');

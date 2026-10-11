@@ -19,6 +19,7 @@ export interface Recording {
 export interface RecordingHooks {
   onLevel?: (level: number) => void;
   onAutoStop?: () => void;
+  onError?: (message: string) => void;
 }
 
 function downsample(input: Float32Array, from: number): Float32Array {
@@ -79,6 +80,12 @@ export async function startRecording(hooks: RecordingHooks = {}): Promise<Record
     if (!heardSpeech && elapsed > NO_SPEECH_MS) fireAuto();
     else if (elapsed >= MAX_SECONDS * 1000) fireAuto();
   };
+
+  stream.getAudioTracks().forEach((t) => {
+    t.onended = () => {
+      if (!closed) hooks.onError?.('Микрофон отключился. Проверь разрешение и попробуй ещё раз.');
+    };
+  });
 
   source.connect(proc);
   proc.connect(mute);

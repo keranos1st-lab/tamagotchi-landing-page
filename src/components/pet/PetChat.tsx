@@ -71,7 +71,7 @@ export function PetChat() {
     return () => document.removeEventListener('selectionchange', onSel);
   }, []);
 
-  const run = async (message: string, task?: { action: TextAction; source: string }) => {
+  const run = async (message: string, task?: { action: TextAction; source: string }, requestId?: string) => {
     const state = usePetStore.getState();
     const history = state.chatHistory;
     const mem = useMemoryStore.getState();
@@ -81,6 +81,7 @@ export function PetChat() {
       history: history.slice(0, -1),
       memory: mem.consent ? mem.items.map((i) => i.text) : [],
       message,
+      requestId,
       task,
     });
     if (res.ok) {
@@ -106,7 +107,7 @@ export function PetChat() {
       addChatMessage('pet', '', {
         kind: 'error',
         error: { code: res.code, message: res.message, retryable: res.retryable },
-        retry: { message, task },
+        retry: { message, task, requestId },
       });
       if (useAiKeyStore.getState().enabled) {
         /* свой ключ: лимиты общего AI не затрагиваются */
@@ -122,9 +123,9 @@ export function PetChat() {
     const msg = text.trim();
     if (!msg || busy || msg.length > MAX_MESSAGE) return;
     setInput('');
-    addChatMessage('user', msg);
+    const requestId = addChatMessage('user', msg);
     track.bump('chat');
-    run(msg);
+    run(msg, undefined, requestId);
   };
 
   const runTask = (action: TextAction, source: string, note: string) => {
@@ -140,7 +141,7 @@ export function PetChat() {
   const retry = (m: ChatMessage) => {
     if (!m.retry || busy) return;
     removeChatMessage(m.id);
-    run(m.retry.message, m.retry.task);
+    run(m.retry.message, m.retry.task, m.retry.requestId);
   };
 
   const onKey = (e: React.KeyboardEvent) => {

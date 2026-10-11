@@ -365,14 +365,24 @@ def handler(event: dict, context) -> dict:
                 )
                 return respond(200, {'ok': True})
             uid = int(user['id'])
+            conn.autocommit = False
+            cur.execute(f'SELECT id FROM {SCHEMA}.users WHERE id=%s FOR UPDATE', (uid,))
+            # Include private notes and cached note responses in account deletion.
+            # to_regclass keeps deletion compatible before the note migration is deployed.
+            for table in ('pet_note_requests', 'pet_notes'):
+                cur.execute('SELECT to_regclass(%s)', (f'{SCHEMA}.{table}',))
+                if cur.fetchone()[0]:
+                    cur.execute(f'DELETE FROM {SCHEMA}.{table} WHERE user_id=%s', (uid,))
             cur.execute(f"UPDATE {SCHEMA}.user_state SET pet = NULL, achievements = NULL, memory = NULL, rev = rev + 1 WHERE user_id = {uid}")
             cur.execute(f"UPDATE {SCHEMA}.sessions SET expires_at = NOW() WHERE user_id = {uid}")
             cur.execute(
                 f"UPDATE {SCHEMA}.users SET email = 'deleted-{uid}-{secrets.token_hex(4)}@deleted.invalid', "
                 f"password_hash = 'deleted' WHERE id = {uid}"
             )
+            conn.commit()
             return respond(200, {'ok': True})
 
         return fail(400, 'bad_request')
     finally:
         conn.close()
+

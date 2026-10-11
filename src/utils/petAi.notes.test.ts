@@ -1,0 +1,19 @@
+// @ts-expect-error bun:test is supplied by the test runner
+import {beforeEach,expect,test} from 'bun:test';
+import {Window} from 'happy-dom';
+const win=new Window({url:'https://localhost/'});
+Object.defineProperty(globalThis,'localStorage',{configurable:true,value:win.localStorage});
+const {askPet}=await import('./petAi');
+const {useAuthStore}=await import('@/store/authStore');
+const {isNoteCommand}=await import('./noteCommands');
+const calls:Array<{headers:Record<string,string>;body:string}>=[];
+let result:Record<string,unknown>;
+let status=200;
+const pet={name:'Кодик',type:'cat' as const,level:4,stage:'baby' as const,hunger:70,happiness:70,energy:80,health:100,intelligence:100};
+const args={pet,history:[],memory:[],message:'Запиши заметку: Дракон летает',requestId:'stable-note-request-123'};
+beforeEach(()=>{calls.length=0;status=200;result={reply:'Записал',noteAction:'create',notes:[]};useAuthStore.getState().setSession('test-session-token',{id:1,email:'test@example.invalid',createdAt:''});globalThis.fetch=(async(_url,init)=>{calls.push({headers:init!.headers as Record<string,string>,body:init!.body as string});return {ok:status===200,status,json:async()=>result} as Response}) as typeof fetch;});
+test('notes carry the session and stable request identifier on retries',async()=>{expect((await askPet(args)).ok).toBe(true);await askPet(args);expect(calls[0].headers['X-Auth-Token']).toBe('test-session-token');expect(JSON.parse(calls[0].body).requestId).toBe(args.requestId);expect(JSON.parse(calls[1].body).requestId).toBe(args.requestId);});
+test('a legacy model reply cannot pretend that a note was saved',async()=>{result={reply:'Конечно, записал!'};const res=await askPet(args);expect(res.ok).toBe(false);if(!res.ok)expect(res.code).toBe('notes_not_ready');});
+test('notes require an account before any server request',async()=>{useAuthStore.getState().clearSession();const res=await askPet(args);expect(res.ok).toBe(false);if(!res.ok)expect(res.code).toBe('notes_login');expect(calls.length).toBe(0);});
+test('storage errors are shown instead of a successful write',async()=>{status=503;result={error:'notes_unavailable',message:'Не удалось подтвердить сохранение',retryable:true};const res=await askPet(args);expect(res.ok).toBe(false);if(!res.ok){expect(res.code).toBe('notes_unavailable');expect(res.retryable).toBe(true);}});
+test('ordinary chats and negative instructions are not note commands',()=>{expect(isNoteCommand('Не записывай заметку: секрет')).toBe(false);expect(isNoteCommand('Что значит запиши заметку')).toBe(false);expect(isNoteCommand('Кодик запиши заметку новая игра')).toBe(true);expect(isNoteCommand('Тёма, исправь заметку номер 3: новый текст','Тёма')).toBe(true);});

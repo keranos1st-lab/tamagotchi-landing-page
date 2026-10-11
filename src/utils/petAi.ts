@@ -1,4 +1,6 @@
 import func2url from '../../backend/func2url.json';
+import { isNoteCommand } from './noteCommands';
+import { useAuthStore } from '@/store/authStore';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
 import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
 
@@ -16,6 +18,8 @@ export type AiOk = {
   sources?: AiSource[];
   spoken?: string;
   asOf?: string;
+  noteAction?: 'create' | 'find' | 'update';
+  notes?: Array<{ id: number; text: string; version: number; updatedAt: string }>;
 };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
@@ -84,11 +88,16 @@ export async function askPet(args: {
   task?: { action: TextAction; source: string };
   voice?: boolean;
   signal?: AbortSignal;
+  requestId?: string;
 }): Promise<AiResult> {
   if (args.signal?.aborted) return AI_CANCELLED;
   if (!URL) return { ok: false, code: 'no_function', message: 'Серверная функция pet-chat не опубликована', retryable: false };
   const { pet, history, memory, message, task, voice } = args;
   const { signal } = args;
+  const token = useAuthStore.getState().token;
+  const noteCommand = !task && isNoteCommand(message, pet.name);
+  if (noteCommand && !token) return { ok: false, code: 'notes_login', message: 'Войди в аккаунт PetAgent, чтобы пользоваться личными заметками.', retryable: false };
+  const requestId = args.requestId ?? clientId() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,10);
   const ctrl = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -102,8 +111,9 @@ export async function askPet(args: {
     const res = await fetch(URL, {
       method: 'POST',
       signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId(), ...ownKeyHeaders() },
+      headers: { 'Content-Type': 'application/json', 'X-Client-Id': clientId(), ...(token ? { 'X-Auth-Token': token } : {}), ...ownKeyHeaders() },
       body: JSON.stringify({
+        requestId,
         message,
         task,
         voice: voice || undefined,
@@ -128,6 +138,7 @@ export async function askPet(args: {
     const data = await res.json().catch(() => null);
     if (cancelled()) return AI_CANCELLED;
     if (res.ok && data?.reply) {
+      if (noteCommand && !['create','find','update'].includes(data.noteAction)) return { ok: false, code: 'notes_not_ready', message: 'Блокнот ещё не подключён на сервере. Сохранение заметки не подтверждено.', retryable: false };
       return {
         ok: true,
         reply: data.reply,
@@ -140,6 +151,8 @@ export async function askPet(args: {
         verified: data.searched ? !!data.verified : undefined,
         sources: Array.isArray(data.sources) && data.sources.length ? data.sources : undefined,
         spoken: typeof data.spoken === 'string' && data.spoken ? data.spoken : undefined,
+        noteAction: ['create','find','update'].includes(data.noteAction) ? data.noteAction : undefined,
+        notes: Array.isArray(data.notes) ? data.notes : undefined,
         asOf: typeof data.asOf === 'string' ? data.asOf : undefined,
       };
     }

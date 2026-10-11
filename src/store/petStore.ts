@@ -22,7 +22,7 @@ export interface ChatMessage {
   sources?: { title: string; url: string; domain: string; date?: string }[];
   task?: { action: TextAction; source: string };
   error?: { code: string; message: string; retryable: boolean };
-  retry?: { message: string; task?: { action: TextAction; source: string } };
+  retry?: { message: string; requestId?: string; task?: { action: TextAction; source: string } };
 }
 
 const TICK_MS = 5000;
