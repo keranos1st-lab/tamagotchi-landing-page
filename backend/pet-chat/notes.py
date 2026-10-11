@@ -6,6 +6,8 @@ import re
 MAX_TEXT = 1800
 MAX_NOTES = 500
 DAILY_COMMANDS = 1000
+LIST_LIMIT = 30
+API_UNAVAILABLE = 'Не удалось выполнить действие. Блокнот временно недоступен, повтори попытку.'
 ID = re.compile(r'^[A-Za-z0-9_-]{8,96}$')
 
 QUICK_CREATE = re.compile(r'^(?:(?:запиши|сохрани|добавь|занеси|внеси)\s+(?:мне\s+)?(?:это\s+)?(?:в|во)\s+(?:мой\s+|моё\s+|мои\s+)?(?:блокнот|заметки|заметку)|запиши(?:\s+мне)?(?=\s*,?\s+что(?:\s|$))|сделай\s+(?:мне\s+)?(?:новую\s+)?заметку)\b(.*)$', re.I | re.S)
@@ -192,3 +194,139 @@ def handle(data, headers, connect, schema):
                 conn.close()
             except Exception:
                 pass
+
+
+def _session(cur, schema, token):
+    cur.execute(f'SELECT user_id FROM {schema}.sessions WHERE token_hash=%s AND expires_at>NOW()', (hashlib.sha256(token.encode()).hexdigest(),))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def _owner_call(headers, connect, schema, work, lock):
+    token = headers.get('x-auth-token', '')
+    if not isinstance(token, str) or not token or len(token) > 200:
+        return error('notes_login', 'Войди в аккаунт PetAgent, чтобы пользоваться заметками.', 401)
+    if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', schema):
+        return error('notes_unavailable', API_UNAVAILABLE, retryable=True)
+    schema = '"' + schema + '"'
+    conn = None
+    try:
+        conn = connect()
+        conn.autocommit = False
+        cur = conn.cursor()
+        uid = _session(cur, schema, token)
+        if not uid:
+            return error('notes_login', 'Сессия истекла. Войди в аккаунт ещё раз.', 401)
+        if lock:
+            cur.execute(f'SELECT id FROM {schema}.users WHERE id=%s FOR UPDATE', (uid,))
+            if not cur.fetchone() or not _session(cur, schema, token):
+                return error('notes_login', 'Сессия истекла. Войди в аккаунт ещё раз.', 401)
+        result = work(cur, schema, uid)
+        if result[0] == 200:
+            conn.commit()
+        return result
+    except Exception as exc:
+        print(f'notes api error: {type(exc).__name__}: {str(exc)[:300]}')
+        return error('notes_unavailable', API_UNAVAILABLE, retryable=True)
+    finally:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _int_or_none(value, low, high):
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
+        raise ValueError
+    return value
+
+
+def _list_work(query, offset):
+    def work(cur, schema, uid):
+        if not query:
+            cur.execute(f'SELECT COUNT(*) FROM {schema}.pet_notes WHERE user_id=%s', (uid,))
+            total = cur.fetchone()[0]
+            cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s ORDER BY updated_at DESC, id DESC LIMIT {LIST_LIMIT} OFFSET {int(offset)}', (uid,))
+            rows = cur.fetchall()
+        else:
+            stems = [stem(w) for w in re.findall(r'[0-9A-Za-zА-Яа-яЁё]+', query)[:12]]
+            cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s ORDER BY updated_at DESC, id DESC LIMIT {MAX_NOTES}', (uid,))
+            matched = [row for row in cur.fetchall() if stems and matches_text(row[1], stems)]
+            total = len(matched)
+            rows = matched[offset:offset + LIST_LIMIT]
+        items = [public(row) for row in rows]
+        return 200, {'ok': True, 'notes': items, 'total': total, 'offset': offset, 'limit': LIST_LIMIT, 'hasMore': offset + len(items) < total}
+    return work
+
+
+def _save_work(note_id, text, expected, request, digest):
+    def work(cur, schema, uid):
+        cur.execute(f'SELECT request_hash,response FROM {schema}.pet_note_requests WHERE user_id=%s AND request_id=%s', (uid, request))
+        previous = cur.fetchone()
+        if previous:
+            if previous[0] != digest:
+                return error('notes_request_conflict', 'Этот запрос уже использован для другого текста. Нажми «Сохранить» ещё раз.', 409)
+            return 200, previous[1]
+        cur.execute(f'SELECT COUNT(*) FROM {schema}.pet_note_requests WHERE user_id=%s AND created_at>NOW()-INTERVAL \'1 day\'', (uid,))
+        if cur.fetchone()[0] >= DAILY_COMMANDS:
+            return error('notes_limit', 'Сегодня слишком много действий с блокнотом. Попробуй позже.', 429)
+        if note_id is None:
+            cur.execute(f'SELECT COUNT(*) FROM {schema}.pet_notes WHERE user_id=%s', (uid,))
+            if cur.fetchone()[0] >= MAX_NOTES:
+                return error('notes_full', 'В блокноте уже 500 заметок. Новая заметка не сохранена.', 409)
+            cur.execute(f'INSERT INTO {schema}.pet_notes(user_id,text) VALUES(%s,%s) RETURNING id,text,version,updated_at', (uid, text))
+            result = {'ok': True, 'action': 'create', 'note': public(cur.fetchone()), 'changed': True}
+        else:
+            cur.execute(f'SELECT id, text, version, updated_at FROM {schema}.pet_notes WHERE user_id=%s AND id=%s FOR UPDATE', (uid, note_id))
+            row = cur.fetchone()
+            if not row:
+                return error('notes_not_found', 'Заметка не найдена. Возможно, она относится к другому аккаунту.', 404)
+            if expected is not None and row[2] != expected:
+                return 409, {'error': 'notes_version_conflict', 'message': 'Заметка уже изменена в другом месте. Твой текст сохранён в окне.', 'retryable': False, 'current': public(row)}
+            if row[1] == text:
+                result = {'ok': True, 'action': 'update', 'note': public(row), 'changed': False}
+            else:
+                cur.execute(f'UPDATE {schema}.pet_notes SET text=%s,version=version+1,updated_at=NOW() WHERE user_id=%s AND id=%s RETURNING id,text,version,updated_at', (text, uid, note_id))
+                result = {'ok': True, 'action': 'update', 'note': public(cur.fetchone()), 'changed': True}
+        cur.execute(f'INSERT INTO {schema}.pet_note_requests(user_id,request_id,request_hash,response) VALUES(%s,%s,%s,%s::jsonb)', (uid, request, digest, json.dumps(result, ensure_ascii=False)))
+        return 200, result
+    return work
+
+
+def handle_api(data, headers, connect, schema):
+    kind = data.get('notesApi')
+    if kind is None:
+        return None
+    if kind == 'list':
+        query = str(data.get('query') or '').strip()
+        if len(query) > 200:
+            return error('bad_request', 'Запрос поиска слишком длинный.', 400)
+        try:
+            offset = _int_or_none(data.get('offset'), 0, MAX_NOTES) or 0
+        except ValueError:
+            return error('bad_request', 'Некорректный запрос списка.', 400)
+        return _owner_call(headers, connect, schema, _list_work(query, offset), False)
+    if kind == 'save':
+        text = str(data.get('text') or '').strip()
+        request = data.get('requestId', '')
+        try:
+            note_id = _int_or_none(data.get('id'), 1, 9223372036854775807)
+            expected = _int_or_none(data.get('expectedVersion'), 1, 2147483647)
+        except ValueError:
+            return error('bad_request', 'Некорректный запрос сохранения.', 400)
+        if not isinstance(request, str) or not ID.fullmatch(request):
+            return error('notes_client_update', 'Для заметок требуется обновлённое приложение PetAgent.', 400)
+        if not text:
+            return error('notes_empty', 'Напиши текст заметки. Ничего не сохранено.', 400)
+        if len(text) > MAX_TEXT:
+            return error('notes_too_long', 'Текст заметки слишком длинный. Допустимо 1800 символов. Ничего не сохранено.', 400)
+        digest = hashlib.sha256(json.dumps({'api': 'save', 'id': note_id, 'text': text, 'v': expected}, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+        return _owner_call(headers, connect, schema, _save_work(note_id, text, expected, request, digest), True)
+    return error('bad_request', 'Неизвестная команда блокнота.', 400)

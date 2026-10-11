@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { PetSprite } from './PetSprite';
 import { ACTION_ANIM, type PetAnim } from './sprites';
 import { FloatingPet } from './FloatingPet';
+import { NotesDialog } from './notes/NotesDialog';
 import { needAnim, PetEmotion, usePetNeed } from './PetEmotion';
 import { usePetNotifications } from './useNotifications';
 import { usePetting } from './usePetting';
@@ -109,6 +110,7 @@ export function GameScreen() {
   return (
     <div className="pa-app flex flex-col">
       <FloatingPet />
+      <NotesDialog />
       <LevelUpModal />
       <IqLevelWatcher />
       <IqLevelToast />

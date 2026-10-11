@@ -951,6 +951,9 @@ def handler(event: dict, context) -> dict:
         return fail(400, 'bad_request', False)
     if len(str(data.get('message') or '')) > MAX_MESSAGE:
         return fail(413, 'too_long', False, {'limit': MAX_MESSAGE})
+    api_result = notes.handle_api(data, headers, db, SCHEMA)
+    if api_result is not None:
+        return respond(*api_result)
     note_result = notes.handle(data, headers, db, SCHEMA)
     if note_result is not None:
         return respond(*note_result)

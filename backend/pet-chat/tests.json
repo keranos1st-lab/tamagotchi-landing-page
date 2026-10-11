@@ -160,6 +160,17 @@
         "requestId": "test-request-0001"
       },
       "expectedStatus": 401
+    },
+    {
+      "name": "Notes list requires login",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "notesApi": "list",
+        "query": "",
+        "offset": 0
+      },
+      "expectedStatus": 401
     }
   ]
 }

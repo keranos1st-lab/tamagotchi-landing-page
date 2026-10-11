@@ -19,6 +19,7 @@ import { cancelVoice, toggleVoice } from '@/utils/voiceDialog';
 import { VoiceBubble } from './VoiceBubble';
 import { useIqUpStore } from '@/store/iqUpStore';
 import { IQ_UP_PHRASE } from './iq';
+import { openNotes } from '@/utils/notesApi';
 
 
 const SIZE = 120;
@@ -412,6 +413,7 @@ function WalkingPet({ onOpenPip, onHide, canPip }: { onOpenPip: () => void; onHi
                   icon={voiceStatus === 'listening' ? 'Square' : voiceActive ? 'X' : 'Mic'}
                   onClick={() => (voiceStatus === 'listening' ? toggleVoice() : voiceActive ? cancelVoice() : toggleVoice())}
                 />
+                <PillButton title="Заметки" icon="NotebookPen" onClick={openNotes} />
                 {canPip && (
                   <PillButton title="Открыть поверх всех окон" icon="PictureInPicture2" onClick={onOpenPip} />
                 )}

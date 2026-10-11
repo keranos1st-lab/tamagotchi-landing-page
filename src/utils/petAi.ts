@@ -1,5 +1,6 @@
 import func2url from '../../backend/func2url.json';
 import { isNoteCommand } from './noteCommands';
+import { notifyNotesChanged } from './notesApi';
 import { useAuthStore } from '@/store/authStore';
 import type { ChatMessage, PetState, TextAction } from '@/store/petStore';
 import { ownKeyHeaders, type AiProvider } from '@/store/aiKeyStore';
@@ -138,6 +139,7 @@ export async function askPet(args: {
     const data = await res.json().catch(() => null);
     if (cancelled()) return AI_CANCELLED;
     if (res.ok && data?.reply) {
+      if (data.noteAction === 'create' || data.noteAction === 'update') notifyNotesChanged();
       if (noteCommand && !['create','find','update'].includes(data.noteAction)) return { ok: false, code: 'notes_not_ready', message: 'Блокнот ещё не подключён на сервере. Сохранение заметки не подтверждено.', retryable: false };
       return {
         ok: true,
