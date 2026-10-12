@@ -1,14 +1,10 @@
 // @ts-expect-error bun:test доступен только при запуске через bun
-import { beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, test } from 'bun:test';
+import { snapshotGlobals } from '@/test/isolate';
 
-const mem = new Map<string, string>();
 const g = globalThis as unknown as Record<string, unknown>;
-g.localStorage = {
-  getItem: (k: string) => (mem.has(k) ? mem.get(k)! : null),
-  setItem: (k: string, v: string) => void mem.set(k, String(v)),
-  removeItem: (k: string) => void mem.delete(k),
-  clear: () => mem.clear(),
-};
+const restoreGlobals = snapshotGlobals();
+afterAll(restoreGlobals);
 g.document = { visibilityState: 'visible', hidden: false, addEventListener() {}, removeEventListener() {} };
 
 const winListeners: Record<string, Array<(e: unknown) => void>> = {};

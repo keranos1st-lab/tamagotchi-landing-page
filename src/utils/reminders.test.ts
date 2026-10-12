@@ -1,8 +1,8 @@
 // @ts-expect-error bun:test is supplied by the test runner
-import { beforeEach, expect, test } from 'bun:test';
-import { Window } from 'happy-dom';
-const win = new Window({ url: 'https://localhost/' });
-Object.defineProperty(globalThis, 'localStorage', { configurable: true, writable: true, value: win.localStorage });
+import { afterAll, beforeEach, expect, test } from 'bun:test';
+import { snapshotGlobals } from '@/test/isolate';
+const restoreGlobals = snapshotGlobals();
+afterAll(restoreGlobals);
 const { useAuthStore } = await import('@/store/authStore');
 const { useNoteDraft } = await import('@/store/noteDraftStore');
 const { useReminderStore } = await import('@/store/reminderStore');

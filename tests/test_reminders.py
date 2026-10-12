@@ -222,6 +222,19 @@ class Commands(unittest.TestCase):
     def test_quick_create_with_colon(self):
         self.assertEqual(notes.parse('запиши: завтра в 12:00 позвонить Сергею', 'Кодик'), {'action': 'create', 'text': 'завтра в 12:00 позвонить Сергею', 'query': ''})
 
+    def test_write_phrasings_are_saved(self):
+        body = 'Сделать сегодня бейджи для конференции'
+        for phrase in (f'Запиши: {body}', f'запиши: {body}', f'Запиши {body}', f'Просто запиши: "{body}"', f'запиши "{body}"',
+                       f'Запиши мне: {body}', f'Запиши, пожалуйста: {body}', f'Записать: {body}', f'Кодик, запиши: {body}',
+                       f'Запиши заметку: {body}', f'Запиши в блокнот: {body}', f'Сохрани {body}'):
+            cmd = notes.parse(phrase, 'Кодик')
+            self.assertIsNotNone(cmd, phrase)
+            self.assertEqual((cmd['action'], cmd['text']), ('create', body), phrase)
+
+    def test_questions_are_not_saved(self):
+        for phrase in ('запиши как дела', 'Запиши, как дела?', 'запиши почему небо голубое', 'Привет', 'Добавить Кодику новую анимацию'):
+            self.assertIsNone(notes.parse(phrase, 'Кодик'), phrase)
+
     def test_old_commands_still_work(self):
         self.assertEqual(notes.parse('Запиши заметку: добавить дракону новую анимацию', 'Кодик')['action'], 'create')
         self.assertEqual(notes.parse('Найди заметку про Сергея', 'Кодик')['action'], 'find')
