@@ -19,12 +19,16 @@ export type AiOk = {
   sources?: AiSource[];
   spoken?: string;
   asOf?: string;
-  noteAction?: 'create' | 'find' | 'update';
+  noteAction?: NoteAction;
   notes?: Array<{ id: number; text: string; version: number; updatedAt: string }>;
   reminderProposal?: ReminderProposal;
 };
 export type AiErr = { ok: false; code: string; message: string; retryable: boolean };
 export type AiCancelled = { ok: false; cancelled: true; code: 'cancelled'; message: string; retryable: false };
+const NOTE_ACTIONS = ['create', 'find', 'update', 'remind', 'unremind'] as const;
+export type NoteAction = (typeof NOTE_ACTIONS)[number];
+const isNoteAction = (v: unknown): v is NoteAction => (NOTE_ACTIONS as readonly unknown[]).includes(v);
+
 export type AiResult = AiOk | AiErr | AiCancelled;
 
 export const aiConfig = { timeoutMs: 40000 };
@@ -140,8 +144,8 @@ export async function askPet(args: {
     const data = await res.json().catch(() => null);
     if (cancelled()) return AI_CANCELLED;
     if (res.ok && data?.reply) {
-      if (data.noteAction === 'create' || data.noteAction === 'update') notifyNotesChanged();
-      if (noteCommand && !['create','find','update'].includes(data.noteAction)) return { ok: false, code: 'notes_not_ready', message: 'Блокнот ещё не подключён на сервере. Сохранение заметки не подтверждено.', retryable: false };
+      if (data.noteAction === 'create' || data.noteAction === 'update' || data.noteAction === 'remind' || data.noteAction === 'unremind') notifyNotesChanged();
+      if (noteCommand && !isNoteAction(data.noteAction)) return { ok: false, code: 'notes_not_ready', message: 'Блокнот ещё не подключён на сервере. Сохранение заметки не подтверждено.', retryable: false };
       return {
         ok: true,
         reply: data.reply,
@@ -154,7 +158,7 @@ export async function askPet(args: {
         verified: data.searched ? !!data.verified : undefined,
         sources: Array.isArray(data.sources) && data.sources.length ? data.sources : undefined,
         spoken: typeof data.spoken === 'string' && data.spoken ? data.spoken : undefined,
-        noteAction: ['create','find','update'].includes(data.noteAction) ? data.noteAction : undefined,
+        noteAction: isNoteAction(data.noteAction) ? data.noteAction : undefined,
         notes: Array.isArray(data.notes) ? data.notes : undefined,
         reminderProposal: data.reminderProposal && typeof data.reminderProposal === 'object' ? data.reminderProposal : undefined,
         asOf: typeof data.asOf === 'string' ? data.asOf : undefined,
