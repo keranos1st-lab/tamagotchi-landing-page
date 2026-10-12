@@ -465,13 +465,133 @@ def synth_yandex(text: str) -> dict:
     return {'audio': audio, 'voice': voice, 'model': 'speechkit-v1', 'api': 'v1', 'wanted': wanted if wanted != voice else None, 'reason': reason or ('cached' if wanted != voice else None)}
 
 
+STT_V3_URL = 'https://stt.api.cloud.yandex.net/stt/v3'
+STT_V3_DEADLINE = 14.0
+
+
+def stt_v3_headers(key: str, folder: str) -> dict:
+    headers = {'Authorization': f'Api-Key {key}', 'Content-Type': 'application/json'}
+    if folder:
+        headers['x-folder-id'] = folder
+    return headers
+
+
+def stt_v3_error(e: urllib.error.HTTPError) -> VoiceError:
+    detail = e.read().decode('utf-8', 'ignore')[:400].lower()
+    print(f'Yandex STT v3 HTTP {e.code}: {detail[:160]}')
+    if e.code == 403 or 'permission' in detail:
+        return VoiceError('stt_no_permission')
+    if e.code == 401:
+        return VoiceError('yandex_bad_key')
+    if e.code == 429 or 'quota' in detail or 'limit' in detail:
+        return VoiceError('yandex_quota', True)
+    if e.code == 400:
+        return VoiceError('stt_bad_audio')
+    return VoiceError('voice_error', True)
+
+
+def stt_v3_text(raw: str) -> str:
+    finals, refined = [], []
+    for line in raw.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        item = item.get('result', item) if isinstance(item, dict) else {}
+        if str(item.get('channelTag') or '0') != '0':
+            continue
+        final = item.get('final')
+        if isinstance(final, dict):
+            alts = final.get('alternatives') or []
+            if alts and alts[0].get('text'):
+                finals.append(str(alts[0]['text']).strip())
+        ref = (item.get('finalRefinement') or {}).get('normalizedText')
+        if isinstance(ref, dict):
+            alts = ref.get('alternatives') or []
+            if alts and alts[0].get('text'):
+                refined.append(str(alts[0]['text']).strip())
+    return ' '.join(refined or finals).strip()
+
+
+def stt_v3_operation_error(op_id: str, headers: dict) -> VoiceError:
+    try:
+        req = urllib.request.Request(f'https://operation.api.cloud.yandex.net/operations/{urllib.parse.quote(op_id)}', headers=headers, method='GET')
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            op = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
+    except urllib.error.HTTPError as e:
+        print(f'Yandex STT v3 операция: HTTP {e.code} {e.read().decode("utf-8", "ignore")[:300]}')
+        return VoiceError('voice_error', True)
+    except Exception as e:
+        print(f'Yandex STT v3 операция: {type(e).__name__}')
+        return VoiceError('voice_error', True)
+    err = op.get('error') or {}
+    print(f'Yandex STT v3 операция завершилась ошибкой: code={err.get("code")} message={str(err.get("message"))[:300]} done={op.get("done")}')
+    text = str(err.get('message') or '').lower()
+    if 'permission' in text or err.get('code') == 7:
+        return VoiceError('stt_no_permission')
+    if err.get('code') == 3:
+        return VoiceError('stt_bad_audio')
+    return VoiceError('voice_error', True)
+
+
+def recognize_v3(pcm: bytes, key: str, folder: str) -> str:
+    """Распознавание речи Yandex SpeechKit API v3: запуск операции и ожидание результата."""
+    headers = stt_v3_headers(key, folder)
+    body = json.dumps({
+        'content': base64.b64encode(pcm).decode('ascii'),
+        'recognitionModel': {
+            'model': 'general',
+            'audioFormat': {'rawAudio': {'audioEncoding': 'LINEAR16_PCM', 'sampleRateHertz': str(STT_RATE), 'audioChannelCount': '1'}},
+        },
+    }).encode('utf-8')
+    deadline = time.time() + STT_V3_DEADLINE
+    try:
+        req = urllib.request.Request(f'{STT_V3_URL}/recognizeFileAsync', data=body, headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            op = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
+    except urllib.error.HTTPError as e:
+        raise stt_v3_error(e)
+    op_id = str(op.get('id') or '')
+    if not op_id:
+        print(f'Yandex STT v3: нет id операции, ключи={list(op)[:6]}')
+        raise VoiceError('voice_error', True)
+
+    delay = 0.4
+    last = 0
+    last_detail = ''
+    while time.time() < deadline:
+        time.sleep(delay)
+        delay = min(delay * 1.5, 1.2)
+        try:
+            req = urllib.request.Request(f'{STT_V3_URL}/getRecognition?' + urllib.parse.urlencode({'operationId': op_id}), headers=headers, method='GET')
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                raw = resp.read().decode('utf-8', 'ignore')
+            return stt_v3_text(raw)
+        except urllib.error.HTTPError as e:
+            last = e.code
+            if e.code in (400, 404, 409, 425):
+                detail = e.read().decode('utf-8', 'ignore')[:700]
+                if 'non-ok' in detail.lower():
+                    raise stt_v3_operation_error(op_id, headers)
+                if last_detail != detail:
+                    print(f'Yandex STT v3 ждёт результат: HTTP {e.code} {detail}')
+                    last_detail = detail
+                continue
+            raise stt_v3_error(e)
+    print(f'Yandex STT v3: результат не готов за {STT_V3_DEADLINE}s, последний код {last}')
+    raise VoiceError('voice_error', True)
+
+
 def handle_stt(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
         key, _, _ = yandex_config()
         return respond(200, {'stt': {'configured': bool(key), 'maxSeconds': STT_MAX_SECONDS, 'rate': STT_RATE, 'maxBytes': STT_MAX_BYTES, 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
     if event.get('httpMethod') != 'POST':
         return fail(405, 'bad_request', False)
-    key, _, _ = yandex_config()
+    key, _, folder = yandex_config()
     if not key:
         return fail(503, 'voice_no_key', False)
     raw_body = event.get('body') or ''
@@ -506,38 +626,18 @@ def handle_stt(event: dict, client_id: str, ip: str) -> dict:
     if u['day'] >= STT_PER_DAY or u['day_ip'] >= STT_PER_DAY_IP:
         return fail(429, 'stt_daily', False)
 
-    query = {'lang': 'ru-RU', 'topic': 'general', 'format': 'lpcm', 'sampleRateHertz': str(STT_RATE)}
-    req = urllib.request.Request(
-        'https://stt.api.cloud.yandex.net/speech/v1/stt:recognize?' + urllib.parse.urlencode(query),
-        data=pcm,
-        headers={'Authorization': f'Api-Key {key}', 'Content-Type': 'application/octet-stream'},
-        method='POST',
-    )
     started = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            result = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode('utf-8', 'ignore')[:400].lower()
-        print(f'Yandex STT HTTP {e.code}: {detail[:160]}')
-        if e.code == 403 or 'permission' in detail:
-            code = 'stt_no_permission'
-        elif e.code == 401:
-            code = 'yandex_bad_key'
-        elif e.code == 429 or 'quota' in detail or 'limit' in detail:
-            code = 'yandex_quota'
-        elif e.code == 400:
-            code = 'stt_bad_audio'
-        else:
-            code = 'voice_error'
-        log(client_id, ip, 'stt', code)
-        return fail(502, code, code in ('voice_error', 'yandex_quota'))
+        text = recognize_v3(pcm, key, folder)
+    except VoiceError as e:
+        log(client_id, ip, 'stt', e.code)
+        return fail(502 if e.code != 'stt_no_permission' else 403, e.code, e.retryable)
     except Exception as e:
-        print(f'Yandex STT error: {type(e).__name__}')
+        print(f'Yandex STT v3 error: {type(e).__name__}')
         log(client_id, ip, 'stt', 'timeout')
         return fail(504, 'voice_error', True)
 
-    text = str(result.get('result') or '').strip()
+    text = text.strip()
     if not text:
         log(client_id, ip, 'stt', 'no_speech', pt=int(seconds * 1000))
         return fail(200, 'stt_no_speech', False, {'text': ''})
