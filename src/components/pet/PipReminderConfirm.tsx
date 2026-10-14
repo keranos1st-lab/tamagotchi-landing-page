@@ -30,7 +30,7 @@ export function PipReminderConfirm() {
   return (
     <div className="absolute inset-x-2 bottom-2 z-10 max-h-[60%] overflow-y-auto" data-testid="pip-reminder">
       <div className="rounded-xl bg-[#12102b]/95 p-1.5 shadow-xl backdrop-blur">
-        <ReminderProposalCard msgId={current.id} proposal={current.reminderProposal} compact />
+        <ReminderProposalCard key={current.id} msgId={current.id} proposal={current.reminderProposal} compact />
       </div>
     </div>
   );
