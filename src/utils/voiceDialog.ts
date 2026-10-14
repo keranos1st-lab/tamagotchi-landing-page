@@ -201,6 +201,11 @@ export async function speakText(text: string) {
   if (vs().note) setTimeout(() => vs().set({ note: null }), 7000);
 }
 
+export function stopListeningIfHidden() {
+  const pipOpen = !!(window as unknown as { documentPictureInPicture?: { window: Window | null } }).documentPictureInPicture?.window;
+  if (document.hidden && vs().status === 'listening' && !pipOpen) cancelVoice();
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && vs().status !== 'idle') cancelVoice();
@@ -208,7 +213,5 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', () => {
     if (vs().status === 'listening') cancelVoice();
   });
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && vs().status === 'listening') cancelVoice();
-  });
+  document.addEventListener('visibilitychange', stopListeningIfHidden);
 }

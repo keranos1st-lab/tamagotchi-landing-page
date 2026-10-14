@@ -21,6 +21,7 @@ import { useIqUpStore } from '@/store/iqUpStore';
 import { IQ_UP_PHRASE } from './iq';
 import { openNotes } from '@/utils/notesApi';
 import { PipReminderConfirm } from './PipReminderConfirm';
+import { PipMicButton, PipVoiceStatus } from './PipVoice';
 
 
 const SIZE = 120;
@@ -448,6 +449,7 @@ function PipPet() {
   const need = usePetNeed();
   const [anim, setAnim] = useState<PetAnim | null>(null);
   const [hover, setHover] = useState(false);
+  const voiceActive = useVoiceStore((st) => st.status !== 'idle');
 
   const play = (a: PetAnim) => {
     setAnim(a);
@@ -467,9 +469,10 @@ function PipPet() {
           <PetSprite type={type} anim={anim ?? needAnim(need) ?? 'idle'} size={130} />
         </button>
       </div>
-      <div className={`mt-1 transition-opacity ${hover ? 'opacity-100' : 'opacity-0'}`}>
-        <PetActionPill onAction={play} />
+      <div className={`mt-1 transition-opacity ${hover || voiceActive ? 'opacity-100' : 'opacity-0'}`}>
+        <PetActionPill onAction={play} extra={<PipMicButton />} />
       </div>
+      <PipVoiceStatus />
       <PipReminderConfirm />
     </div>
   );
