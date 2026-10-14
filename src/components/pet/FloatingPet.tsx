@@ -20,6 +20,7 @@ import { VoiceBubble } from './VoiceBubble';
 import { useIqUpStore } from '@/store/iqUpStore';
 import { IQ_UP_PHRASE } from './iq';
 import { openNotes } from '@/utils/notesApi';
+import { PipReminderConfirm } from './PipReminderConfirm';
 
 
 const SIZE = 120;
@@ -469,6 +470,7 @@ function PipPet() {
       <div className={`mt-1 transition-opacity ${hover ? 'opacity-100' : 'opacity-0'}`}>
         <PetActionPill onAction={play} />
       </div>
+      <PipReminderConfirm />
     </div>
   );
 }
@@ -479,7 +481,7 @@ export function FloatingPet() {
   const canPip = !!getPipApi();
 
   const openPip = async () => {
-    const win = await openPipWindow(220, 230);
+    const win = await openPipWindow(260, 330);
     if (!win) return;
     win.addEventListener('pagehide', () => setPipWin(null));
     setPipWin(win);

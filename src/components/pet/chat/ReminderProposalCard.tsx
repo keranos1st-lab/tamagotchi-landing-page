@@ -7,7 +7,7 @@ import { openSettings } from '../account/AccountButton';
 
 type Proposal = NonNullable<ChatMessage['reminderProposal']>;
 
-export function ReminderProposalCard({ msgId, proposal }: { msgId: string; proposal: Proposal }) {
+export function ReminderProposalCard({ msgId, proposal, compact = false }: { msgId: string; proposal: Proposal; compact?: boolean }) {
   const update = usePetStore((s) => s.updateChatMessage);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<NotesErr | null>(null);
@@ -55,7 +55,7 @@ export function ReminderProposalCard({ msgId, proposal }: { msgId: string; propo
       {error && (
         <div role="alert" className="mt-2 rounded-lg border border-rose-400/25 bg-rose-500/10 px-2.5 py-1.5 text-xs text-rose-200">
           {error.message}
-          {error.code === 'notes_login' && (
+          {error.code === 'notes_login' && !compact && (
             <button onClick={() => openSettings('account')} className="ml-2 font-bold underline">
               Войти
             </button>
@@ -71,9 +71,11 @@ export function ReminderProposalCard({ msgId, proposal }: { msgId: string; propo
           <Icon name={busy ? 'Loader' : 'Check'} size={13} className={busy ? 'animate-spin' : ''} />
           {error?.retryable ? 'Повторить' : 'Поставить'}
         </button>
-        <button onClick={openNotes} disabled={busy} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-50">
-          Изменить в блокноте
-        </button>
+        {!compact && (
+          <button onClick={openNotes} disabled={busy} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-white hover:bg-white/20 disabled:opacity-50">
+            Изменить в блокноте
+          </button>
+        )}
         <button onClick={() => set('dismissed')} disabled={busy} className="rounded-lg px-3 py-1.5 text-xs font-bold text-white/55 hover:text-white disabled:opacity-50">
           Не нужно
         </button>
