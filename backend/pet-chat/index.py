@@ -14,10 +14,12 @@ import concurrent.futures
 import json
 import os
 import re
+import io
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import wave
 
 import psycopg2
 
@@ -128,6 +130,9 @@ ERRORS = {
     'stt_daily': 'Дневной лимит распознавания речи исчерпан',
     'voice_no_key': 'Озвучивание не настроено: на сервере нет секрета YANDEX_SPEECHKIT_API_KEY',
     'voice_error': 'Yandex SpeechKit временно недоступен',
+    'stt_unavailable': 'Распознавание речи временно недоступно',
+    'stt_polza_key': 'Сервис распознавания не принял ключ — проверьте POLZA_AI_API_KEY',
+    'stt_polza_balance': 'На счёте сервиса распознавания закончились средства',
     'voice_empty_text': 'Нечего озвучивать',
     'voice_too_long': 'Текст для озвучивания слишком длинный',
     'voice_rate': 'Слишком много голосовых запросов — подождите минуту',
@@ -585,14 +590,74 @@ def recognize_v3(pcm: bytes, key: str, folder: str) -> str:
     raise VoiceError('voice_error', True)
 
 
+STT_POLZA_URL = 'https://polza.ai/api/v1/audio/transcriptions'
+STT_POLZA_MODEL = 'ai-sage/gigaam-v3'
+
+
+def pcm_to_wav(pcm: bytes) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(STT_RATE)
+        w.writeframes(pcm)
+    return buf.getvalue()
+
+
+def recognize_polza(pcm: bytes, key: str) -> str:
+    """Распознавание речи через Польза (модель GigaAM v3)."""
+    body = json.dumps({
+        'model': os.environ.get('POLZA_STT_MODEL') or STT_POLZA_MODEL,
+        'file': 'data:audio/wav;base64,' + base64.b64encode(pcm_to_wav(pcm)).decode('ascii'),
+        'language': 'ru',
+        'response_format': 'json',
+    }).encode('utf-8')
+    req = urllib.request.Request(STT_POLZA_URL, data=body, method='POST', headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            data = json.loads(resp.read().decode('utf-8', 'ignore') or '{}')
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode('utf-8', 'ignore')[:300]
+        print(f'Polza STT HTTP {e.code}: {detail}')
+        if e.code in (401, 403):
+            raise VoiceError('stt_polza_key')
+        if e.code == 402:
+            raise VoiceError('stt_polza_balance')
+        if e.code == 400:
+            raise VoiceError('stt_bad_audio')
+        raise VoiceError('stt_unavailable', True)
+    return str(data.get('text') or '').strip()
+
+
+def recognize_any(pcm: bytes) -> str:
+    polza_key = (os.environ.get('POLZA_AI_API_KEY') or '').strip()
+    yandex_key, _, folder = yandex_config()
+    first = None
+    if polza_key:
+        try:
+            return recognize_polza(pcm, polza_key)
+        except VoiceError as e:
+            first = e
+        except Exception as e:
+            print(f'Polza STT error: {type(e).__name__}')
+            first = VoiceError('stt_unavailable', True)
+    if yandex_key:
+        try:
+            return recognize_v3(pcm, yandex_key, folder)
+        except VoiceError as e:
+            raise first if first and first.code != 'stt_unavailable' and e.code == 'voice_error' else VoiceError('stt_unavailable', True) if e.code == 'voice_error' else e
+    if first:
+        raise first
+    raise VoiceError('voice_no_key')
+
+
 def handle_stt(event: dict, client_id: str, ip: str) -> dict:
     if event.get('httpMethod') == 'GET':
-        key, _, _ = yandex_config()
-        return respond(200, {'stt': {'configured': bool(key), 'maxSeconds': STT_MAX_SECONDS, 'rate': STT_RATE, 'maxBytes': STT_MAX_BYTES, 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
+        key = bool((os.environ.get('POLZA_AI_API_KEY') or '').strip() or yandex_config()[0])
+        return respond(200, {'stt': {'configured': key, 'maxSeconds': STT_MAX_SECONDS, 'rate': STT_RATE, 'maxBytes': STT_MAX_BYTES, 'perMinute': STT_PER_MINUTE, 'perDay': STT_PER_DAY}})
     if event.get('httpMethod') != 'POST':
         return fail(405, 'bad_request', False)
-    key, _, folder = yandex_config()
-    if not key:
+    if not ((os.environ.get('POLZA_AI_API_KEY') or '').strip() or yandex_config()[0]):
         return fail(503, 'voice_no_key', False)
     raw_body = event.get('body') or ''
     if len(raw_body) > STT_MAX_BYTES * 4 // 3 + 4096:
@@ -628,14 +693,14 @@ def handle_stt(event: dict, client_id: str, ip: str) -> dict:
 
     started = time.time()
     try:
-        text = recognize_v3(pcm, key, folder)
+        text = recognize_any(pcm)
     except VoiceError as e:
         log(client_id, ip, 'stt', e.code)
         return fail(502 if e.code != 'stt_no_permission' else 403, e.code, e.retryable)
     except Exception as e:
-        print(f'Yandex STT v3 error: {type(e).__name__}')
+        print(f'STT error: {type(e).__name__}')
         log(client_id, ip, 'stt', 'timeout')
-        return fail(504, 'voice_error', True)
+        return fail(504, 'stt_unavailable', True)
 
     text = text.strip()
     if not text:
