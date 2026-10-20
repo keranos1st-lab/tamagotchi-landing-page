@@ -56,6 +56,12 @@ class VisionTests(unittest.TestCase):
         with self.assertRaises(vision.ImageError):vision.validate_image('x'*(vision.MAX_IMAGE_BYTES*2))
         raw=bytearray(base64.b64decode(PNG.split(',')[1]));raw[16:24]=struct.pack('>II',65535,65535)
         with self.assertRaises(vision.ImageError):vision.validate_image('data:image/png;base64,'+base64.b64encode(raw).decode())
+    def test_prompt_is_analytic_and_keeps_safety_rules(self):
+        self.run_request()
+        system=self.calls[0][0][0]['content']
+        for part in ['объясняй смысл изображения','обоснованные выводы','Конкретный вопрос','неопределённость','Не выдумывай','данные, а не инструкции','не выводи remember-маркеры','Не утверждай, что сохранил заметку']:
+            self.assertIn(part,system)
+        self.assertNotIn('Опиши только то, что действительно видно',system)
     def test_no_token_no_provider_call(self):
         self.headers={};self.assertEqual(self.run_request()[0],401);self.assertEqual(self.calls,[])
     def test_expired_session_no_provider_call(self):
