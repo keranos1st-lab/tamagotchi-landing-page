@@ -25,6 +25,7 @@ import psycopg2
 
 import websearch
 import notes
+import vision
 
 API_URL = 'https://polza.ai/api/v1/chat/completions'
 DEFAULT_MODEL = 'openai/gpt-4o-mini'
@@ -944,6 +945,7 @@ def call_model(messages: list, max_tokens: int, timeout: float, own: dict | None
 
 def status_info(client_id: str, ip: str) -> dict:
     info = {
+        'imageInputVersion': 1,
         'configured': bool(os.environ.get('POLZA_AI_API_KEY')),
         'model': os.environ.get('POLZA_AI_MODEL') or DEFAULT_MODEL,
         'searchModel': search_model(),
@@ -1114,6 +1116,8 @@ def handler(event: dict, context) -> dict:
 
     if not isinstance(data, dict):
         return fail(400, 'bad_request', False)
+    if 'image' in data or data.get('imageAnalysis'):
+        return vision.handle(data, headers, client_id, ip, own, globals())
     if len(str(data.get('message') or '')) > MAX_MESSAGE:
         return fail(413, 'too_long', False, {'limit': MAX_MESSAGE})
     api_result = notes.handle_api(data, headers, db, SCHEMA)

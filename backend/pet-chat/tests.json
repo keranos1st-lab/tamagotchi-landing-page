@@ -12,7 +12,8 @@
       "path": "/",
       "expectedStatus": 200,
       "expectedBody": {
-        "configured": true
+        "configured": true,
+        "imageInputVersion": 1
       },
       "bodyMatcher": "partial"
     },
@@ -205,6 +206,21 @@
         "requestId": "test-request-0003"
       },
       "expectedStatus": 401
+    },
+    {
+      "name": "Image without token",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "imageAnalysis": true,
+        "message": "Что на снимке?",
+        "image": "data:image/png;base64,AAAA"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error": "image_login"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }
