@@ -157,7 +157,7 @@ def handle(data, headers, client_id, ip, own, core):
     provider = own or {'url': core['API_URL'], 'model': os.environ.get('POLZA_AI_VISION_MODEL') or core['DEFAULT_MODEL'], 'key': os.environ['POLZA_AI_API_KEY'], 'provider': 'polza'}
     pet = data.get('pet') if isinstance(data.get('pet'), dict) else {}
     try:
-        result, _ = core['call_model'](model_input(pet, question.strip(), image, core), 1100, 35, provider)
+        result, _ = core['call_model'](model_input(pet, question.strip(), image, core), 2000, 35, provider)
     except urllib.error.HTTPError as exc:
         # Provider error bodies may echo input: never read or log them here.
         core['log'](metered_client, ip, 'image', 'provider_error', own=is_own)
