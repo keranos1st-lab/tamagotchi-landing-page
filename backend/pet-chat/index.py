@@ -28,7 +28,7 @@ import notes
 import vision
 
 API_URL = 'https://polza.ai/api/v1/chat/completions'
-DEFAULT_MODEL = 'openai/gpt-4o-mini'
+DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 SCHEMA = os.environ.get('MAIN_DB_SCHEMA', 'public')
 
 MAX_MESSAGE = 2000
@@ -86,7 +86,7 @@ TEXT_ACTIONS = {
 }
 
 PROVIDERS = {
-    'polza': ('https://polza.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
+    'polza': ('https://polza.ai/api/v1/chat/completions', 'deepseek/deepseek-v4.1-flash-1017'),
     'openai': ('https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'),
     'openrouter': ('https://openrouter.ai/api/v1/chat/completions', 'openai/gpt-4o-mini'),
     'deepseek': ('https://api.deepseek.com/chat/completions', 'deepseek-chat'),
